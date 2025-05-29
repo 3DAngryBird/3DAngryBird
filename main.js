@@ -2,8 +2,6 @@ import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-// import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-
 let trajectoryLine = null;
 let cameraMode = "side"; // front: 정면(조준), side: 측면(발사)
 let isDragging = false;
@@ -68,7 +66,6 @@ scene.add(light);
 
 // === 물리 world ===
 const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-
 // === 바닥 ===
 const floorGeo = new THREE.BoxGeometry(100, 0.1, 100);
 const floorMat = new THREE.MeshStandardMaterial({
@@ -81,11 +78,11 @@ scene.add(floorMesh);
 const floorBody = new CANNON.Body({
   type: CANNON.Body.STATIC,
   shape: new CANNON.Box(new CANNON.Vec3(100, 0.1, 100)),
-  position: new CANNON.Vec3(0, -0.05, 0),
+  position: new CANNON.Vec3(0, -0.1, 0),
 });
 world.addBody(floorBody);
 
-// === 구조물 ===
+// === 구조물: Blender-exported GLTF 모델 로딩 ===
 const boxes = [];
 const loader = new GLTFLoader();
 loader.load("./models/Test2.glb", (gltf) => {
@@ -93,11 +90,7 @@ loader.load("./models/Test2.glb", (gltf) => {
     if (child.isMesh) {
       // Three.js mesh 추가
       const mesh = child.clone();
-      // 메쉬 바닥 정렬: 바운딩박스로 Y 오프셋 계산
       mesh.geometry.computeBoundingBox();
-      let bbox = mesh.geometry.boundingBox;
-      const yOffset = -bbox.min.y; // 바닥이 y=0에 위치하도록
-      // mesh.position.z = -5;
       mesh.castShadow = true;
       scene.add(mesh);
 
@@ -108,7 +101,7 @@ loader.load("./models/Test2.glb", (gltf) => {
       // 반(extents) 로 CANNON.Box 생성
       const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
       const shape = new CANNON.Box(halfExtents);
-      const body = new CANNON.Body({ mass: 1 });
+      const body = new CANNON.Body({ mass: 1, material: defaultMat });
       body.addShape(shape);
       body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
       body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
@@ -128,9 +121,84 @@ scene.add(ballMesh);
 const ballBody = new CANNON.Body({
   mass: 1,
   shape: new CANNON.Sphere(0.2),
-  position: new CANNON.Vec3(0, 1, 3),
+  position: new CANNON.Vec3(0, 0.2, 3),
 });
 world.addBody(ballBody);
+
+// === 캐릭터 관리 ===
+const characters = [];
+let charCount = 0;
+
+// 캐릭터 수 UI
+const charCountDiv = document.createElement("div");
+charCountDiv.style.position = "absolute";
+charCountDiv.style.top = "10px";
+charCountDiv.style.left = "10px";
+charCountDiv.style.color = "white";
+charCountDiv.style.fontSize = "18px";
+charCountDiv.style.fontFamily = "sans-serif";
+charCountDiv.innerHTML = "Characters: 0";
+document.body.appendChild(charCountDiv);
+const charMaterial = new CANNON.Material("charMat");
+const defaultMat = world.defaultMaterial;
+const charDefaultContact = new CANNON.ContactMaterial(
+  charMaterial,
+  defaultMat, // 땅/건물 등에 붙는 기본 머티리얼
+  {
+    friction: 1,
+    restitution: 0.5,
+  }
+);
+world.addContactMaterial(charDefaultContact);
+
+function updateCharCount() {
+  charCountDiv.innerHTML = `Characters: ${charCount}`;
+}
+
+function spawnCharacter(position) {
+  const geo = new THREE.SphereGeometry(0.2);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(position);
+  scene.add(mesh);
+  const body = new CANNON.Body({
+    mass: 1,
+    shape: new CANNON.Sphere(0.2),
+    position: new CANNON.Vec3(position.x, position.y, position.z),
+    material: charMaterial,
+  });
+  world.addBody(body);
+
+  // 사망 처리
+  body.addEventListener("collide", (event) => {
+    const impact = event.contact.getImpactVelocityAlongNormal();
+    console.log("Impact velocity:", impact);
+    if (Math.abs(impact) > DEATH_THRESHOLD && mesh.visible) {
+      setTimeout(() => {
+        setTimeout(() => {
+          world.removeBody(body);
+          charCount = Math.max(0, charCount - 1);
+          updateCharCount();
+        }, 500);
+        const shape = body.shapes[0];
+        if (shape instanceof CANNON.Sphere) {
+          shape.radius *= 1.1; // 1.1배 확대
+          body.updateBoundingRadius(); // 내부적으로 boundingRadius 재계산
+          body.updateMassProperties(); // 관성 갱신
+        }
+        mesh.visible = false;
+      }, 1000);
+    }
+  });
+  characters.push({ mesh, body });
+  charCount = characters.length;
+  updateCharCount();
+}
+
+// 빌딩 아래에 캐릭터 한 명 배치
+spawnCharacter(new THREE.Vector3(0, 0.2, 0));
+
+const DEATH_THRESHOLD = 0.5; // 적절히 조정
 
 // === 이벤트 ===
 window.addEventListener("keydown", (e) => {
@@ -199,6 +267,11 @@ function animate() {
     b.mesh.position.copy(b.body.position);
     b.mesh.quaternion.copy(b.body.quaternion);
   });
+  characters.forEach(({ mesh, body }) => {
+    mesh.position.copy(body.position);
+    mesh.quaternion.copy(body.quaternion);
+  });
+
   if (cameraMode === "side") {
     camera.position.set(10, 2, 0);
     camera.lookAt(0, 1, 0);
