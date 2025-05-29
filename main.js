@@ -88,7 +88,7 @@ world.addBody(floorBody);
 // === 구조물 ===
 const boxes = [];
 const loader = new GLTFLoader();
-loader.load("Test2.glb", (gltf) => {
+loader.load("./models/Test2.glb", (gltf) => {
   gltf.scene.traverse((child) => {
     if (child.isMesh) {
       // Three.js mesh 추가
