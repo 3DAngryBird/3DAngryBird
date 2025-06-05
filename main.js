@@ -67,7 +67,7 @@ scene.add(light);
 // === 물리 world ===
 const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 // === 바닥 ===
-const floorGeo = new THREE.BoxGeometry(100, 0.1, 100);
+const floorGeo = new THREE.BoxGeometry(100, 0.0001, 100);
 const floorMat = new THREE.MeshStandardMaterial({
   color: 0x888888,
   transparent: true,
@@ -77,8 +77,8 @@ const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 scene.add(floorMesh);
 const floorBody = new CANNON.Body({
   type: CANNON.Body.STATIC,
-  shape: new CANNON.Box(new CANNON.Vec3(100, 0.1, 100)),
-  position: new CANNON.Vec3(0, -0.1, 0),
+  shape: new CANNON.Box(new CANNON.Vec3(100, 0.0001, 100)),
+  position: new CANNON.Vec3(0, 0, 0),
 });
 world.addBody(floorBody);
 
@@ -149,6 +149,8 @@ const charDefaultContact = new CANNON.ContactMaterial(
     restitution: 0.5,
   }
 );
+world.solver.iterations = 500;
+world.solver.tolerance = 0.001;
 world.addContactMaterial(charDefaultContact);
 
 function updateCharCount() {
@@ -187,7 +189,7 @@ function spawnCharacter(position) {
           body.updateMassProperties(); // 관성 갱신
         }
         mesh.visible = false;
-      }, 1000);
+      }, 500);
     }
   });
   characters.push({ mesh, body });
@@ -197,6 +199,7 @@ function spawnCharacter(position) {
 
 // 빌딩 아래에 캐릭터 한 명 배치
 spawnCharacter(new THREE.Vector3(0, 0.2, 0));
+spawnCharacter(new THREE.Vector3(0, 2.4, 0));
 
 const DEATH_THRESHOLD = 0.5; // 적절히 조정
 
