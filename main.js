@@ -3,7 +3,7 @@ import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 let trajectoryLine = null;
-let cameraMode = "side"; // front: 정면(조준), side: 측면(발사)
+let cameraMode = "side"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
 let isDragging = false;
 let dragStart = null;
 let dragDeltaX = 0;
@@ -12,12 +12,18 @@ let launchReady = false;
 let launchPower = 0;
 let launchHeight = 0;
 let canLaunch = false;
+let mixer = null;
+
+let gameStart = false;
+let playAnime = false;
+let timer = 0;
 
 // 방향 벡터 저장
 let directionVec = new THREE.Vector3(0, 0, -1);
 
 // === 씬, 카메라, 렌더러 ===
 const scene = new THREE.Scene();
+const animScene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
   75,
   window.innerWidth / window.innerHeight,
@@ -63,11 +69,14 @@ function updateDirectionLine() {
 const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(5, 10, 5);
 scene.add(light);
+const animLight = new THREE.DirectionalLight(0xffffff, 1);
+animLight.position.set(5, 10, 5);
+animScene.add(animLight);
 
 // === 물리 world ===
 const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 // === 바닥 ===
-const floorGeo = new THREE.BoxGeometry(100, 0.0001, 100);
+const floorGeo = new THREE.BoxGeometry(100, 0.1, 100);
 const floorMat = new THREE.MeshStandardMaterial({
   color: 0x888888,
   transparent: true,
@@ -77,15 +86,15 @@ const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 scene.add(floorMesh);
 const floorBody = new CANNON.Body({
   type: CANNON.Body.STATIC,
-  shape: new CANNON.Box(new CANNON.Vec3(100, 0.0001, 100)),
-  position: new CANNON.Vec3(0, 0, 0),
+  shape: new CANNON.Box(new CANNON.Vec3(100, 0.1, 100)),
+  position: new CANNON.Vec3(0, -0.1, 0),
 });
 world.addBody(floorBody);
 
 // === 구조물: Blender-exported GLTF 모델 로딩 ===
 const boxes = [];
 const loader = new GLTFLoader();
-loader.load("./models/Test2.glb", (gltf) => {
+loader.load("./models/test50.glb", (gltf) => {
   gltf.scene.traverse((child) => {
     if (child.isMesh) {
       // Three.js mesh 추가
@@ -112,6 +121,23 @@ loader.load("./models/Test2.glb", (gltf) => {
     }
   });
 });
+
+// === 구조물: Blender Animation GLB 모델 로딩
+const loaderAnim = new GLTFLoader();
+loader.load("./models/WallAnime.glb", (gltf) => {
+  //애니메이션 관련
+loaderAnim.load("./models/WallAnime.glb", (gltf) => {
+  const model = gltf.scene;
+  animScene.add(model);
+  mixer = new THREE.AnimationMixer(model);
+  if(!playAnime){
+    gltf.animations.forEach((clip) => {
+    mixer.clipAction(clip).play();
+  });
+}
+});
+})
+
 
 // === 공 ===
 const ballGeo = new THREE.SphereGeometry(0.2);
@@ -146,26 +172,26 @@ const charDefaultContact = new CANNON.ContactMaterial(
   defaultMat, // 땅/건물 등에 붙는 기본 머티리얼
   {
     friction: 1,
-    restitution: 0.5,
+    restitution: 0,
   }
 );
-world.solver.iterations = 500;
-world.solver.tolerance = 0.001;
 world.addContactMaterial(charDefaultContact);
+world.solver.iterations = 100;           // 기본값은 10
+world.solver.tolerance = 0;
 
 function updateCharCount() {
   charCountDiv.innerHTML = `Characters: ${charCount}`;
 }
 
 function spawnCharacter(position) {
-  const geo = new THREE.SphereGeometry(0.2);
+  const geo = new THREE.SphereGeometry(0.8);
   const mat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.copy(position);
   scene.add(mesh);
   const body = new CANNON.Body({
     mass: 1,
-    shape: new CANNON.Sphere(0.2),
+    shape: new CANNON.Sphere(0.8),
     position: new CANNON.Vec3(position.x, position.y, position.z),
     material: charMaterial,
   });
@@ -189,7 +215,7 @@ function spawnCharacter(position) {
           body.updateMassProperties(); // 관성 갱신
         }
         mesh.visible = false;
-      }, 500);
+      }, 1000);
     }
   });
   characters.push({ mesh, body });
@@ -198,14 +224,13 @@ function spawnCharacter(position) {
 }
 
 // 빌딩 아래에 캐릭터 한 명 배치
-spawnCharacter(new THREE.Vector3(0, 0.2, 0));
-spawnCharacter(new THREE.Vector3(0, 2.4, 0));
+spawnCharacter(new THREE.Vector3(0, 3.2, -7));
 
 const DEATH_THRESHOLD = 0.5; // 적절히 조정
 
 // === 이벤트 ===
 window.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "c") {
+  if (e.key.toLowerCase() === "c" && gameStart) {
     cameraMode = cameraMode === "side" ? "front" : "side";
     canLaunch = cameraMode === "side";
     console.log("Camera mode:", cameraMode);
@@ -224,6 +249,7 @@ window.addEventListener("mousedown", (e) => {
   }
 });
 window.addEventListener("mousemove", (e) => {
+  if(gameStart){
   if (!isDragging) return;
   const dx = dragStart.x - e.clientX;
   const dy = dragStart.y - e.clientY;
@@ -247,8 +273,10 @@ window.addEventListener("mousemove", (e) => {
     trajectoryLine = createTrajectoryLine(new THREE.Vector3(0, 1, 3), v);
     scene.add(trajectoryLine);
   }
+}
 });
 window.addEventListener("mouseup", (e) => {
+  if(gameStart){
   if (isDragging) isDragging = false;
   if (cameraMode === "side" && canLaunch) {
     // side 뷰: 높이 및 파워 결정
@@ -256,12 +284,13 @@ window.addEventListener("mouseup", (e) => {
     launchHeight = dy * 0.01;
     launchReady = true;
     canLaunch = false;
-  }
+  }}
 });
 
 // === animate ===
 function animate() {
-  requestAnimationFrame(animate);
+    requestAnimationFrame(animate);
+  if(gameStart){
   const dt = clock.getDelta();
   world.step(1 / 60, dt);
   ballMesh.position.copy(ballBody.position);
@@ -319,6 +348,18 @@ function animate() {
   });
   renderer.render(scene, camera);
   scene, camera;
+}else{
+  //애니메이션 파트
+  camera.position.set(10, 15, 5);
+  camera.lookAt(0, 0, -5);
+  const delta = clock.getDelta();
+  if (mixer) mixer.update(delta);
+  renderer.render(animScene, camera);
+  timer += delta;
+  if(timer >= 10){
+    gameStart = true;
+  }
+}
 }
 animate();
 
