@@ -103,6 +103,7 @@ const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 floorMesh.position.set(0, -0.05, 0);
 floorMesh.receiveShadow = true;
 const animFloorMesh = floorMesh.clone();
+
 scene.add(floorMesh);
 animScene.add(animFloorMesh);
 const floorBody = new CANNON.Body({
@@ -115,6 +116,7 @@ world.addBody(floorBody);
 // 배경(그냥 하늘색으로)
 scene.background = new THREE.Color(0x87ceeb);
 animScene.background = new THREE.Color(0x87ceeb);
+
 
 // === 구조물: GLTF 모델 로딩 ===
 const boxes = [];
