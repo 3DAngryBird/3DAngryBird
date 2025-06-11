@@ -5,7 +5,7 @@ import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
 let trajectoryLine = null;
-let cameraMode = "side"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
+let cameraMode = "side"; // front: 정면(조준), side: 측면(발사)
 let isDragging = false;
 let dragStart = null;
 let dragDeltaX = 0;
@@ -14,22 +14,17 @@ let launchReady = false;
 let launchPower = 0;
 let launchHeight = 0;
 let canLaunch = false;
-let mixer = null;
 let cameraMovementSpeed = 10;
 let pigpath = "./models/pig.glb";
 let kingpigpath = "./models/Kingpig.glb";
 let helmetpigpath = "./models/Helmetpig.glb";
 
-let gameStart = false;
-let playAnime = false;
-let timer = 0;
 
 // 방향 벡터 저장
 let directionVec = new THREE.Vector3(0, 0, -1);
 
 // === 씬, 카메라, 렌더러 ===
 const scene = new THREE.Scene();
-const animScene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
   75,
   window.innerWidth / window.innerHeight,
@@ -78,9 +73,6 @@ function updateDirectionLine() {
 const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(5, 10, 5);
 scene.add(light);
-const animLight = new THREE.DirectionalLight(0xffffff, 1);
-animLight.position.set(5, 10, 5);
-animScene.add(animLight);
 
 // === 물리 world ===
 const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
@@ -88,15 +80,12 @@ const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 // === 바닥 ===
 const textureLoader = new THREE.TextureLoader();
 const grassTexture = textureLoader.load("./models/onetonegrass.png");
-grassTexture.wrapT = THREE.RepeatWrapping;
 grassTexture.wrapS = THREE.RepeatWrapping;
+grassTexture.wrapT = THREE.RepeatWrapping;
 grassTexture.repeat.set(50, 50);
+
 const floorGeo = new THREE.BoxGeometry(100, 0.1, 100);
-const floorMat = new THREE.MeshStandardMaterial({
-  color: 0x888888,
-  transparent: true,
-  opacity: 0.5,
-});
+const floorMat = new THREE.MeshStandardMaterial({ map: grassTexture });
 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 floorMesh.position.set(0, -0.05, 0);
 floorMesh.receiveShadow = true;
@@ -114,7 +103,7 @@ scene.background = new THREE.Color(0x87ceeb);
 // === 구조물: GLTF 모델 로딩 ===
 const boxes = [];
 const loader = new GLTFLoader();
-loader.load("./models/test50.glb", (gltf) => {
+loader.load("./models/Test2.glb", (gltf) => {
   gltf.scene.traverse((child) => {
     if (child.isMesh) {
       const mesh = child.clone();
@@ -143,22 +132,6 @@ loader.load("./models/test50.glb", (gltf) => {
 // 추가조명
 const ambient = new THREE.AmbientLight(0xffffff, 1.0); // 색상, 강도(0.0~1.0)
 scene.add(ambient);
-
-// === 구조물: Blender Animation GLB 모델 로딩
-const loaderAnim = new GLTFLoader();
-loader.load("./models/WallAnime.glb", (gltf) => {
-  //애니메이션 관련
-loaderAnim.load("./models/WallAnime.glb", (gltf) => {
-  const model = gltf.scene;
-  animScene.add(model);
-  mixer = new THREE.AnimationMixer(model);
-  if(!playAnime){
-    gltf.animations.forEach((clip) => {
-    mixer.clipAction(clip).play();
-  });
-}
-});
-})
 
 
 // === 공 ===
@@ -189,17 +162,11 @@ document.body.appendChild(charCountDiv);
 
 const charMaterial = new CANNON.Material("charMat");
 const defaultMat = world.defaultMaterial;
-const charDefaultContact = new CANNON.ContactMaterial(
-  charMaterial,
-  defaultMat,
-  {
-    friction: 1,
-    restitution: 0,
-  }
-);
+const charDefaultContact = new CANNON.ContactMaterial(charMaterial, defaultMat, {
+  friction: 1,
+  restitution: 0.5,
+});
 world.addContactMaterial(charDefaultContact);
-world.solver.iterations = 100;           // 기본값은 10
-world.solver.tolerance = 0;
 
 function updateCharCount() {
   charCountDiv.innerHTML = `Characters: ${charCount}`;
@@ -216,6 +183,7 @@ function spawnCharacter(name, position) {
   } else if (name == kingpigpath) {
     size = 0.33 * sizeconstant;
   }
+  
 
   // 1) 구체 메쉬 생성
   const geo = new THREE.SphereGeometry(size);
@@ -262,7 +230,7 @@ function spawnCharacter(name, position) {
       greenball.add(pigRoot);
 
       // 위치/스케일 보정
-      pigRoot.position.set(0, (-1 * size) / 11.0, 0);
+      pigRoot.position.set(0, -1 * size / 11.0, 0);
       pigRoot.scale.set(0.1, 0.1, 0.1);
 
       // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
@@ -273,6 +241,7 @@ function spawnCharacter(name, position) {
           child.material.needsUpdate = true;
         }
       });
+
     });
   }
 
@@ -282,7 +251,7 @@ function spawnCharacter(name, position) {
       greenball.add(pigRoot);
 
       // 위치/스케일 보정
-      pigRoot.position.set(0, (-1 * size) / 11.0, 0);
+      pigRoot.position.set(0, -1 * size / 11.0, 0);
       pigRoot.scale.set(0.1, 0.1, 0.1);
 
       // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
@@ -293,6 +262,7 @@ function spawnCharacter(name, position) {
           child.material.needsUpdate = true;
         }
       });
+
     });
   }
 
@@ -302,7 +272,7 @@ function spawnCharacter(name, position) {
       greenball.add(pigRoot);
 
       // 위치/스케일 보정
-      pigRoot.position.set(0, (-10 * size) / 11.0, 0);
+      pigRoot.position.set(0, -10 * size / 11.0, 0);
       pigRoot.scale.set(0.1, 0.1, 0.1);
 
       // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
@@ -313,6 +283,7 @@ function spawnCharacter(name, position) {
           child.material.needsUpdate = true;
         }
       });
+  
 
       // 수염 조정(기존코드 유지)
       const mustache = pigRoot.getObjectByName("mustache");
@@ -331,9 +302,9 @@ function spawnCharacter(name, position) {
   return mesh;
 }
 
-// 빌딩 아래에 캐릭터 한 명 배치
-spawnCharacter(new THREE.Vector3(0, 3.2, -7));
+const DEATH_THRESHOLD = 0.5;
 const greenball = spawnCharacter(helmetpigpath, new THREE.Vector3(0, 0.2, 0));
+// kingpig면 0.33 위에 소환해야하고 나머지는 0.2
 
 // =======================================
 //  PointerLockControls 세팅
@@ -408,7 +379,6 @@ window.addEventListener("mousedown", (e) => {
 });
 
 window.addEventListener("mousemove", (e) => {
-  if(gameStart){
   if (isPointerMode || !isDragging) return;
   const dx = dragStart.x - e.clientX;
   const dy = dragStart.y - e.clientY;
@@ -429,26 +399,27 @@ window.addEventListener("mousemove", (e) => {
     trajectoryLine = createTrajectoryLine(new THREE.Vector3(0, 1, 3), v);
     scene.add(trajectoryLine);
   }
-}
 });
 
 window.addEventListener("mouseup", (e) => {
-  if(gameStart){
-  if (isDragging) isDragging = false;
+  if (isPointerMode) return;
+  if (!isDragging) return;
+  isDragging = false;
   if (cameraMode === "side" && canLaunch) {
     const dy = dragStart.y - e.clientY;
     launchHeight = dy * 0.01;
     launchReady = true;
     canLaunch = false;
-  }}
+  }
 });
 
 // =======================================
 //  animate 함수: 물리 업데이트 + 카메라/렌더링
 // =======================================
 function animate() {
-    requestAnimationFrame(animate);
-  if(gameStart){
+  requestAnimationFrame(animate);
+
+  // 물리 엔진 스텝
   const dt = clock.getDelta();
   world.step(1 / 60, dt);
 
@@ -518,20 +489,8 @@ function animate() {
   });
 
   renderer.render(scene, camera);
-  scene, camera;
-}else{
-  //애니메이션 파트
-  camera.position.set(10, 15, 5);
-  camera.lookAt(0, 0, -5);
-  const delta = clock.getDelta();
-  if (mixer) mixer.update(delta);
-  renderer.render(animScene, camera);
-  timer += delta;
-  if(timer >= 10){
-    gameStart = true;
-  }
 }
-}
+
 animate();
 
 function createBox({ width, height, depth, position, mass = 1 }) {
