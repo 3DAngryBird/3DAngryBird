@@ -92,11 +92,13 @@ grassTexture.wrapT = THREE.RepeatWrapping;
 grassTexture.wrapS = THREE.RepeatWrapping;
 grassTexture.repeat.set(50, 50);
 const floorGeo = new THREE.BoxGeometry(100, 0.1, 100);
-const floorMat = new THREE.MeshStandardMaterial({
-  color: 0x888888,
-  transparent: true,
-  opacity: 0.5,
-});
+// const floorMat = new THREE.MeshStandardMaterial({
+//   color: 0x888888,
+//   transparent: true,
+//   opacity: 0.5,
+// });
+
+const floorMat = new THREE.MeshStandardMaterial({ map: grassTexture });
 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 floorMesh.position.set(0, -0.05, 0);
 floorMesh.receiveShadow = true;
@@ -148,18 +150,18 @@ scene.add(ambient);
 const loaderAnim = new GLTFLoader();
 loader.load("./models/WallAnime.glb", (gltf) => {
   //애니메이션 관련
-loaderAnim.load("./models/WallAnime.glb", (gltf) => {
-  const model = gltf.scene;
-  animScene.add(model);
-  mixer = new THREE.AnimationMixer(model);
-  if(!playAnime){
-    gltf.animations.forEach((clip) => {
-    mixer.clipAction(clip).play();
+  loaderAnim.load("./models/WallAnime.glb", (gltf) => {
+    console.log("GLTF loaded:", gltf);
+    const model = gltf.scene;
+    animScene.add(model);
+    mixer = new THREE.AnimationMixer(model);
+    if (!playAnime) {
+      gltf.animations.forEach((clip) => {
+        mixer.clipAction(clip).play();
+      });
+    }
   });
-}
 });
-})
-
 
 // === 공 ===
 const ballGeo = new THREE.SphereGeometry(0.2);
@@ -198,7 +200,7 @@ const charDefaultContact = new CANNON.ContactMaterial(
   }
 );
 world.addContactMaterial(charDefaultContact);
-world.solver.iterations = 100;           // 기본값은 10
+world.solver.iterations = 100; // 기본값은 10
 world.solver.tolerance = 0;
 
 function updateCharCount() {
@@ -332,7 +334,8 @@ function spawnCharacter(name, position) {
 }
 
 // 빌딩 아래에 캐릭터 한 명 배치
-spawnCharacter(new THREE.Vector3(0, 3.2, -7));
+// spawnCharacter(new THREE.Vector3(0, 3.2, -7));
+const DEATH_THRESHOLD = 0.5;
 const greenball = spawnCharacter(helmetpigpath, new THREE.Vector3(0, 0.2, 0));
 
 // =======================================
@@ -408,129 +411,130 @@ window.addEventListener("mousedown", (e) => {
 });
 
 window.addEventListener("mousemove", (e) => {
-  if(gameStart){
-  if (isPointerMode || !isDragging) return;
-  const dx = dragStart.x - e.clientX;
-  const dy = dragStart.y - e.clientY;
-  if (cameraMode === "front") {
-    const angle = dx * 0.005;
-    directionVec.set(Math.sin(angle), 0, -Math.cos(angle));
-    updateDirectionLine();
-    launchPower = dx * 0.01;
-  } else if (cameraMode === "side") {
-    launchHeight = dy * 0.01;
-    launchPower = dx * 0.01;
-    const speed = 8;
-    const vx = directionVec.x * launchPower * speed;
-    const vy = launchHeight * speed;
-    const vz = directionVec.z * launchPower * speed;
-    const v = new THREE.Vector3(vx, vy, vz);
-    if (trajectoryLine) scene.remove(trajectoryLine);
-    trajectoryLine = createTrajectoryLine(new THREE.Vector3(0, 1, 3), v);
-    scene.add(trajectoryLine);
+  if (gameStart) {
+    if (isPointerMode || !isDragging) return;
+    const dx = dragStart.x - e.clientX;
+    const dy = dragStart.y - e.clientY;
+    if (cameraMode === "front") {
+      const angle = dx * 0.005;
+      directionVec.set(Math.sin(angle), 0, -Math.cos(angle));
+      updateDirectionLine();
+      launchPower = dx * 0.01;
+    } else if (cameraMode === "side") {
+      launchHeight = dy * 0.01;
+      launchPower = dx * 0.01;
+      const speed = 8;
+      const vx = directionVec.x * launchPower * speed;
+      const vy = launchHeight * speed;
+      const vz = directionVec.z * launchPower * speed;
+      const v = new THREE.Vector3(vx, vy, vz);
+      if (trajectoryLine) scene.remove(trajectoryLine);
+      trajectoryLine = createTrajectoryLine(new THREE.Vector3(0, 1, 3), v);
+      scene.add(trajectoryLine);
+    }
   }
-}
 });
 
 window.addEventListener("mouseup", (e) => {
-  if(gameStart){
-  if (isDragging) isDragging = false;
-  if (cameraMode === "side" && canLaunch) {
-    const dy = dragStart.y - e.clientY;
-    launchHeight = dy * 0.01;
-    launchReady = true;
-    canLaunch = false;
-  }}
+  if (gameStart) {
+    if (isDragging) isDragging = false;
+    if (cameraMode === "side" && canLaunch) {
+      const dy = dragStart.y - e.clientY;
+      launchHeight = dy * 0.01;
+      launchReady = true;
+      canLaunch = false;
+    }
+  }
 });
 
 // =======================================
 //  animate 함수: 물리 업데이트 + 카메라/렌더링
 // =======================================
 function animate() {
-    requestAnimationFrame(animate);
-  if(gameStart){
-  const dt = clock.getDelta();
-  world.step(1 / 60, dt);
+  requestAnimationFrame(animate);
+  if (gameStart) {
+    const dt = clock.getDelta();
+    world.step(1 / 60, dt);
 
-  // 메쉬와 바디 동기화
-  ballMesh.position.copy(ballBody.position);
-  ballMesh.quaternion.copy(ballBody.quaternion);
-  boxes.forEach((b) => {
-    b.mesh.position.copy(b.body.position);
-    b.mesh.quaternion.copy(b.body.quaternion);
-  });
-  characters.forEach(({ mesh, body }) => {
-    mesh.position.copy(body.position);
-    mesh.quaternion.copy(body.quaternion);
-  });
+    // 메쉬와 바디 동기화
+    ballMesh.position.copy(ballBody.position);
+    ballMesh.quaternion.copy(ballBody.quaternion);
+    boxes.forEach((b) => {
+      b.mesh.position.copy(b.body.position);
+      b.mesh.quaternion.copy(b.body.quaternion);
+    });
+    characters.forEach(({ mesh, body }) => {
+      mesh.position.copy(body.position);
+      mesh.quaternion.copy(body.quaternion);
+    });
 
-  // ── 포인터락 모드: WASD/Space/Shift로 이동 ──
-  if (isPointerMode) {
-    if (keys.KeyW) pointerControls.moveForward(cameraMovementSpeed * dt);
-    if (keys.KeyS) pointerControls.moveForward(-cameraMovementSpeed * dt);
-    if (keys.KeyA) pointerControls.moveRight(-cameraMovementSpeed * dt);
-    if (keys.KeyD) pointerControls.moveRight(cameraMovementSpeed * dt);
-    if (keys.Space) camera.translateY(cameraMovementSpeed * dt);
-    if (keys.ShiftLeft) camera.translateY(-cameraMovementSpeed * dt);
-  }
-  // ── 드래그/발사 모드: 원래 카메라 로직 ──
-  else {
-    if (cameraMode === "side") {
-      camera.position.set(10, 2, 0);
-      camera.lookAt(0, 1, 0);
+    // ── 포인터락 모드: WASD/Space/Shift로 이동 ──
+    if (isPointerMode) {
+      if (keys.KeyW) pointerControls.moveForward(cameraMovementSpeed * dt);
+      if (keys.KeyS) pointerControls.moveForward(-cameraMovementSpeed * dt);
+      if (keys.KeyA) pointerControls.moveRight(-cameraMovementSpeed * dt);
+      if (keys.KeyD) pointerControls.moveRight(cameraMovementSpeed * dt);
+      if (keys.Space) camera.translateY(cameraMovementSpeed * dt);
+      if (keys.ShiftLeft) camera.translateY(-cameraMovementSpeed * dt);
+    }
+    // ── 드래그/발사 모드: 원래 카메라 로직 ──
+    else {
+      if (cameraMode === "side") {
+        camera.position.set(10, 2, 0);
+        camera.lookAt(0, 1, 0);
 
-      if (launchReady) {
-        const speed = 8;
-        const vx = directionVec.x * launchPower * speed;
-        const vz = directionVec.z * launchPower * speed;
-        const vy = launchHeight * speed;
-        ballBody.velocity.set(vx, vy, vz);
-        ballBody.angularVelocity.setZero();
-        ballBody.position.set(0, 1, 3);
-        launchReady = false;
-      }
+        if (launchReady) {
+          const speed = 8;
+          const vx = directionVec.x * launchPower * speed;
+          const vz = directionVec.z * launchPower * speed;
+          const vy = launchHeight * speed;
+          ballBody.velocity.set(vx, vy, vz);
+          ballBody.angularVelocity.setZero();
+          ballBody.position.set(0, 1, 3);
+          launchReady = false;
+        }
 
-      const v = new THREE.Vector3(
-        directionVec.x * launchPower * 8,
-        launchHeight * 8,
-        directionVec.z * launchPower * 8
-      );
-      if (trajectoryLine) scene.remove(trajectoryLine);
-      trajectoryLine = createTrajectoryLine(new THREE.Vector3(0, 1, 3), v);
-      scene.add(trajectoryLine);
-    } else {
-      const camOffset = new THREE.Vector3(0, 1.5, 4);
-      camera.position.copy(ballMesh.position).add(camOffset);
-      const lookTarget = ballMesh.position.clone().add(directionVec);
-      camera.lookAt(lookTarget);
-      if (trajectoryLine) {
-        scene.remove(trajectoryLine);
-        trajectoryLine = null;
+        const v = new THREE.Vector3(
+          directionVec.x * launchPower * 8,
+          launchHeight * 8,
+          directionVec.z * launchPower * 8
+        );
+        if (trajectoryLine) scene.remove(trajectoryLine);
+        trajectoryLine = createTrajectoryLine(new THREE.Vector3(0, 1, 3), v);
+        scene.add(trajectoryLine);
+      } else {
+        const camOffset = new THREE.Vector3(0, 1.5, 4);
+        camera.position.copy(ballMesh.position).add(camOffset);
+        const lookTarget = ballMesh.position.clone().add(directionVec);
+        camera.lookAt(lookTarget);
+        if (trajectoryLine) {
+          scene.remove(trajectoryLine);
+          trajectoryLine = null;
+        }
       }
     }
-  }
 
-  // 라벨 업데이트
-  axisLabels.forEach(({ div, position }) => {
-    const pos = position.clone().project(camera);
-    div.style.left = `${(pos.x * 0.5 + 0.5) * window.innerWidth}px`;
-    div.style.top = `${(-pos.y * 0.5 + 0.5) * window.innerHeight}px`;
-  });
+    // 라벨 업데이트
+    axisLabels.forEach(({ div, position }) => {
+      const pos = position.clone().project(camera);
+      div.style.left = `${(pos.x * 0.5 + 0.5) * window.innerWidth}px`;
+      div.style.top = `${(-pos.y * 0.5 + 0.5) * window.innerHeight}px`;
+    });
 
-  renderer.render(scene, camera);
-  scene, camera;
-}else{
-  //애니메이션 파트
-  camera.position.set(10, 15, 5);
-  camera.lookAt(0, 0, -5);
-  const delta = clock.getDelta();
-  if (mixer) mixer.update(delta);
-  renderer.render(animScene, camera);
-  timer += delta;
-  if(timer >= 10){
-    gameStart = true;
+    renderer.render(scene, camera);
+    scene, camera;
+  } else {
+    //애니메이션 파트
+    camera.position.set(10, 15, 5);
+    camera.lookAt(0, 0, -5);
+    const delta = clock.getDelta();
+    if (mixer) mixer.update(delta);
+    renderer.render(animScene, camera);
+    timer += delta;
+    if (timer >= 10) {
+      gameStart = true;
+    }
   }
-}
 }
 animate();
 
