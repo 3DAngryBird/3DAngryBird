@@ -75,6 +75,8 @@ const floorMat = new THREE.MeshStandardMaterial({
 });
 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 scene.add(floorMesh);
+let floorMesh2 = floorMesh.clone();
+animScene.add(floorMesh2);
 const floorBody = new CANNON.Body({
   type: CANNON.Body.STATIC,
   shape: new CANNON.Box(new CANNON.Vec3(100, 0.0001, 100)),
@@ -82,7 +84,14 @@ const floorBody = new CANNON.Body({
 });
 world.addBody(floorBody);
 
+<<<<<<< Updated upstream
 // === 구조물: Blender-exported GLTF 모델 로딩 ===
+=======
+// 배경(그냥 하늘색으로)
+scene.background = new THREE.Color(0x87ceeb);
+animScene.background = new THREE.Color(0x87ceeb);
+// === 구조물: GLTF 모델 로딩 ===
+>>>>>>> Stashed changes
 const boxes = [];
 const loader = new GLTFLoader();
 loader.load("./models/Test2.glb", (gltf) => {
@@ -113,6 +122,32 @@ loader.load("./models/Test2.glb", (gltf) => {
   });
 });
 
+<<<<<<< Updated upstream
+=======
+// 추가조명
+const ambient = new THREE.AmbientLight(0xffffff, 1.0); // 색상, 강도(0.0~1.0)
+const ambient2 = new THREE.AmbientLight(0xffffff, 1.0);
+scene.add(ambient);
+animScene.add(ambient2);
+
+// === 구조물: Blender Animation GLB 모델 로딩
+const loaderAnim = new GLTFLoader();
+loader.load("./models/WallAnime.glb", (gltf) => {
+  //애니메이션 관련
+  loaderAnim.load("./models/WallAnime.glb", (gltf) => {
+    console.log("GLTF loaded:", gltf);
+    const model = gltf.scene;
+    animScene.add(model);
+    mixer = new THREE.AnimationMixer(model);
+    if (!playAnime) {
+      gltf.animations.forEach((clip) => {
+        mixer.clipAction(clip).play();
+      });
+    }
+  });
+});
+
+>>>>>>> Stashed changes
 // === 공 ===
 const ballGeo = new THREE.SphereGeometry(0.2);
 const ballMat = new THREE.MeshStandardMaterial({ color: 0xff3333 });
