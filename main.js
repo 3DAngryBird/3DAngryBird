@@ -102,7 +102,10 @@ const floorMat = new THREE.MeshStandardMaterial({ map: grassTexture });
 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 floorMesh.position.set(0, -0.05, 0);
 floorMesh.receiveShadow = true;
+const animFloorMesh = floorMesh.clone();
+
 scene.add(floorMesh);
+animScene.add(animFloorMesh);
 const floorBody = new CANNON.Body({
   type: CANNON.Body.STATIC,
   shape: new CANNON.Box(new CANNON.Vec3(100, 0.1, 100)),
@@ -112,6 +115,8 @@ world.addBody(floorBody);
 
 // 배경(그냥 하늘색으로)
 scene.background = new THREE.Color(0x87ceeb);
+animScene.background = new THREE.Color(0x87ceeb);
+
 
 // === 구조물: GLTF 모델 로딩 ===
 const boxes = [];
@@ -144,7 +149,9 @@ loader.load("./models/test50.glb", (gltf) => {
 
 // 추가조명
 const ambient = new THREE.AmbientLight(0xffffff, 1.0); // 색상, 강도(0.0~1.0)
+const animAmbient = new THREE.AmbientLight(0xffffff, 1.0);
 scene.add(ambient);
+animScene.add(animAmbient);
 
 // === 구조물: Blender Animation GLB 모델 로딩
 const loaderAnim = new GLTFLoader();
