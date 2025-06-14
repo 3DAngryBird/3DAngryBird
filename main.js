@@ -5,6 +5,12 @@ import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
 const DEV_MODE = true;
+let selectedStage = null;
+let showLogo = false;
+
+const stageOverlay = document.getElementById("stage-overlay");
+const logoOverlay = document.getElementById("logo-overlay");
+
 let trajectoryLine = null;
 let cameraMode = "front"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
 const initialFrontPos = new THREE.Vector3(0, 2, 5);
@@ -29,6 +35,17 @@ let playAnime = DEV_MODE;
 let timer = 0;
 
 let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
+
+document.querySelectorAll("#stage-buttons button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    selectedStage = Number(btn.dataset.stage);
+    stageOverlay.style.display = "none";
+
+    // 애니메이션 씬 재생 시작 (기존 timer 흐름 이용)
+    timer = 0;
+    playAnime = true; // animScene 재생 허용
+  });
+});
 
 // 방향 벡터 저장
 let directionVec = new THREE.Vector3(0, 0, -1);
@@ -474,6 +491,37 @@ window.addEventListener("mouseup", (e) => {
 // =======================================
 function animate() {
   requestAnimationFrame(animate);
+
+  if (selectedStage == null) {
+    return;
+  }
+  if (!gameStart) {
+    //애니메이션 파트
+    camera.position.set(10, 15, 5);
+    camera.lookAt(0, 0, -5);
+    const delta = clock.getDelta();
+    if (mixer) mixer.update(delta);
+    renderer.render(animScene, camera);
+    timer += delta;
+    if (timer >= 10) {
+      // gameStart = true;
+      playAnime = false;
+      showLogo = true;
+      timer = 0;
+    }
+
+    if (showLogo) {
+      logoOverlay.style.display = "flex";
+      timer += clock.getDelta();
+      if (timer >= 1) {
+        // 1초 후
+        showLogo = false;
+        logoOverlay.style.display = "none";
+        gameStart = true; // 게임 시작
+      }
+      return;
+    }
+  }
   if (gameStart) {
     const dt = clock.getDelta();
     world.step(1 / 60, dt);
@@ -547,17 +595,6 @@ function animate() {
 
     renderer.render(scene, camera);
     scene, camera;
-  } else {
-    //애니메이션 파트
-    camera.position.set(10, 15, 5);
-    camera.lookAt(0, 0, -5);
-    const delta = clock.getDelta();
-    if (mixer) mixer.update(delta);
-    renderer.render(animScene, camera);
-    timer += delta;
-    if (timer >= 10) {
-      gameStart = true;
-    }
   }
 }
 animate();
