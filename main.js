@@ -498,6 +498,9 @@ function animate() {
       if (keys.KeyD) pointerControls.moveRight(cameraMovementSpeed * dt);
       if (keys.Space) camera.translateY(cameraMovementSpeed * dt);
       if (keys.ShiftLeft) camera.translateY(-cameraMovementSpeed * dt);
+      if (camera.position.y < 0.1) {
+        camera.position.y = 0.1; // 바닥에 닿지 않도록
+      }
     }
     // ── 드래그/발사 모드: 원래 카메라 로직 ──
     else {
