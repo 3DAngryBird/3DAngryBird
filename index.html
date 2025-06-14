@@ -29,12 +29,44 @@
     <div id="stage-overlay" class="overlay">
       <h1>Stage 선택하기</h1>
       <div id="stage-buttons" class="buttons">
-        <div><button data-stage="1">1</button><br /><small>Best: -</small></div>
-        <div><button data-stage="2">2</button><br /><small>Best: -</small></div>
-        <div><button data-stage="3">3</button><br /><small>Best: -</small></div>
-        <div><button data-stage="4">4</button><br /><small>Best: -</small></div>
-        <div><button data-stage="5">5</button><br /><small>Best: -</small></div>
+        <div>
+          <button data-stage="1">1</button><br /><small
+            >Best: <span class="overlay-best">-</span></small
+          >
+        </div>
+        <div>
+          <button data-stage="2">2</button><br /><small
+            >Best: <span class="overlay-best">-</span></small
+          >
+        </div>
+        <div>
+          <button data-stage="3">3</button><br /><small
+            >Best: <span class="overlay-best">-</span></small
+          >
+        </div>
+        <div>
+          <button data-stage="4">4</button><br /><small
+            >Best: <span class="overlay-best">-</span></small
+          >
+        </div>
+        <div>
+          <button data-stage="5">5</button><br /><small
+            >Best: <span class="overlay-best">-</span></small
+          >
+        </div>
       </div>
+      <button
+        onclick="localStorage.clear();
+         document.querySelectorAll('#stage-buttons [data-stage]').forEach(btn => {
+        const s = btn.getAttribute('data-stage');
+        const span = btn.parentElement.querySelector('.overlay-best');
+        if (span) span.textContent = '-';
+      });
+      "
+        id="clear-btn"
+      >
+        Best Score 기록 초기화
+      </button>
     </div>
 
     <div id="logo-overlay" class="overlay" style="display: none">
@@ -67,6 +99,44 @@
         <span>Characters:</span>
         <span id="char-count">0</span>
       </div>
+      <div class="panel-row">
+        <span>Best:</span>
+        <span id="best-score-panel">–</span>
+      </div>
     </div>
+    <script>
+      (function () {
+        // 스테이지별 Best를 가져오는 헬퍼
+        function getBest(stage) {
+          const v = localStorage.getItem("stage" + stage + "Best");
+          return v !== null ? Number(v) : "–";
+        }
+
+        // 1) Overlay 버튼 옆 Best 채우기
+        document
+          .querySelectorAll("#stage-buttons [data-stage]")
+          .forEach((btn) => {
+            const s = btn.getAttribute("data-stage");
+            const span = btn.parentElement.querySelector(".overlay-best");
+            if (span) span.textContent = getBest(s);
+          });
+
+        // 2) Control Panel Best 채우기
+        const cpBest = document.getElementById("best-score-panel");
+        // 현재 선택된 스테이지가 없으면 가장 작은 값(=전체 중 최솟값) 표시
+        const sel = window.selectedStage || null;
+        if (sel) {
+          cpBest.textContent = getBest(sel);
+        } else {
+          // 페이지 로드시 selectedStage가 아직 없을 때는 1~5 중 최소값
+          let min = Infinity;
+          for (let i = 1; i <= 5; i++) {
+            const b = getBest(i);
+            if (typeof b === "number" && b < min) min = b;
+          }
+          cpBest.textContent = min === Infinity ? "–" : min;
+        }
+      })();
+    </script>
   </body>
 </html>

@@ -13,10 +13,12 @@ const elCurrentStage = document.getElementById("current-stage");
 const btnResetStage = document.getElementById("reset-stage");
 const stageBtns = document.querySelectorAll(".stage-btn");
 const elThrowCount = document.getElementById("throw-count");
+const elBestScorePanel = document.getElementById("best-score-panel");
 const elCharacterCount = document.getElementById("char-count");
 const controlPanel = document.getElementById("control-panel");
 
 let throwCount = 0;
+let scoreCount = 0;
 let trajectoryLine = null;
 let cameraMode = "front"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
 const initialFrontPos = new THREE.Vector3(0, 2, 5);
@@ -135,6 +137,11 @@ btnResetStage.addEventListener("click", () => {
 });
 
 function initStage(stageNumber) {
+  throwCount = 0;
+  scoreCount = 0;
+  elThrowCount.textContent = `${throwCount} (${scoreCount})`;
+  updateBestScoreDisplay();
+
   boxes.forEach(({ mesh, body }) => {
     scene.remove(mesh);
     world.removeBody(body);
@@ -152,8 +159,6 @@ function initStage(stageNumber) {
   });
   debrisList.length = 0;
 
-  throwCount = 0;
-  elThrowCount.textContent = throwCount;
   ballBody.position.copy(initialBallPos);
   ballBody.velocity.setZero();
   ballBody.angularVelocity.setZero();
@@ -248,6 +253,35 @@ function initStage(stageNumber) {
     });
   });
   spawnCharacter(pigpath, new THREE.Vector3(0, 0.2, 0));
+  spawnCharacter(helmetpigpath, new THREE.Vector3(1, 0.2, 0));
+}
+
+function getBestScore(stage) {
+  const v = localStorage.getItem(`stage${stage}Best`);
+  return v !== null ? Number(v) : Infinity;
+}
+
+function saveBestScore(stage, score) {
+  const prev = getBestScore(stage);
+  if (score < prev) {
+    localStorage.setItem(`stage${stage}Best`, score);
+  }
+}
+
+function updateBestScoreDisplay() {
+  const best = getBestScore(selectedStage);
+  const text = best === Infinity ? "–" : best;
+  // Control Panel
+  elBestScorePanel.textContent = text;
+  // Overlay
+  document.querySelectorAll("#stage-buttons button").forEach((btn) => {
+    const s = Number(btn.dataset.stage);
+    const span = btn.querySelector(".overlay-best");
+    if (span) {
+      const b = getBestScore(s);
+      span.textContent = b === Infinity ? "–" : b;
+    }
+  });
 }
 
 // 방향 벡터 저장
@@ -384,7 +418,10 @@ const ballBody = new CANNON.Body({
 world.addBody(ballBody);
 function onBallLaunched() {
   throwCount += 1;
-  elThrowCount.textContent = throwCount;
+  if (charCount > 0) {
+    scoreCount++;
+  }
+  elThrowCount.textContent = `${throwCount} (${scoreCount})`;
 }
 
 // === 캐릭터 관리 ===
@@ -407,9 +444,14 @@ world.solver.tolerance = 0;
 
 function updateCharCount() {
   elCharacterCount.textContent = charCount;
+  if (charCount === 0) {
+    saveBestScore(selectedStage, scoreCount);
+    updateBestScoreDisplay();
+  }
 }
 
 function spawnCharacter(name, position) {
+  let hasDied = false;
   // 모델 파일 경로 결정
   let sizeconstant = 1.0;
   let size = 0.0;
@@ -439,8 +481,10 @@ function spawnCharacter(name, position) {
 
   // 3) 충돌 이벤트 처리 (기존 로직 유지)
   body.addEventListener("collide", (event) => {
+    if (hasDied) return; // 이미 죽은 경우 무시
     const impact = event.contact.getImpactVelocityAlongNormal();
-    if (Math.abs(impact) > DEATH_THRESHOLD && mesh.visible) {
+    if (Math.abs(impact) > DEATH_THRESHOLD) {
+      hasDied = true; // 죽음 상태로 설정
       setTimeout(() => {
         setTimeout(() => {
           world.removeBody(body);
