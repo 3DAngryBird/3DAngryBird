@@ -7,6 +7,9 @@ import { PointerLockControls } from "three/addons/controls/PointerLockControls.j
 const DEV_MODE = true;
 let trajectoryLine = null;
 let cameraMode = "front"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
+const initialFrontPos = new THREE.Vector3(0, 2, 5);
+const initialFrontTarget = new THREE.Vector3(0, 1, 0);
+const initialBallPos = new THREE.Vector3(0, 0.2, 3);
 let isDragging = false;
 let dragStart = null;
 let dragDeltaX = 0;
@@ -24,6 +27,8 @@ let helmetpigpath = "./models/Helmetpig.glb";
 let gameStart = DEV_MODE;
 let playAnime = DEV_MODE;
 let timer = 0;
+
+let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
 
 // 방향 벡터 저장
 let directionVec = new THREE.Vector3(0, 0, -1);
@@ -450,6 +455,16 @@ window.addEventListener("mouseup", (e) => {
       launchHeight = dy * 0.01;
       launchReady = true;
       canLaunch = false;
+
+      setTimeout(() => {
+        ballBody.position.copy(initialBallPos);
+        ballBody.velocity.setZero();
+        ballBody.angularVelocity.setZero();
+        ballBody.quaternion.set(0, 0, 0, 1);
+        ballMesh.position.copy(initialBallPos);
+        ballMesh.quaternion.set(0, 0, 0, 1);
+        c;
+      }, WAIT_AFTER_THROW);
     }
   }
 });
@@ -510,10 +525,8 @@ function animate() {
         trajectoryLine = createTrajectoryLine(new THREE.Vector3(0, 1, 3), v);
         scene.add(trajectoryLine);
       } else {
-        const camOffset = new THREE.Vector3(0, 1.5, 4);
-        camera.position.copy(ballMesh.position).add(camOffset);
-        const lookTarget = ballMesh.position.clone().add(directionVec);
-        camera.lookAt(lookTarget);
+        camera.position.copy(initialFrontPos);
+        camera.lookAt(initialFrontTarget);
         if (trajectoryLine) {
           scene.remove(trajectoryLine);
           trajectoryLine = null;
