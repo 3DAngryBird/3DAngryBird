@@ -35,6 +35,12 @@ let playAnime = DEV_MODE;
 let timer = 0;
 
 let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
+const GLASS_BREAK_THRESHOLD = 2.5;
+const debrisList = [];
+const DEBRIS_COUNT = 30; // 잔해 개수
+const DEBRIS_LIFETIME = 1.5; // 초 단위
+const GRAVITY = new THREE.Vector3(0, -9.82, 0);
+const bodiesToRemove = [];
 
 document.querySelectorAll("#stage-buttons button").forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -148,6 +154,7 @@ loader.load("./models/house.glb", (gltf) => {
     if (child.isMesh) {
       const material = child.material;
       const matName = material.name || "defaultMat";
+      const isGlass = matName.includes("Glass");
 
       const mesh = child.clone();
       mesh.geometry.computeBoundingBox();
@@ -159,22 +166,73 @@ loader.load("./models/house.glb", (gltf) => {
       const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
       const shape = new CANNON.Box(halfExtents);
 
-      let mess = 1;
+      let mass = 1;
       if (matName.includes("Stone")) {
-        mess = 3;
+        mass = 3;
       } else if (matName.includes("Wood")) {
-        mess = 1;
+        mass = 1;
       } else if (matName.includes("Glass")) {
-        mess = 0.5;
+        mass = 0.5;
       }
       const defaultMat = world.defaultMaterial;
-      const body = new CANNON.Body({ mass: 1, shape });
+      const body = new CANNON.Body({ mass: mass, shape });
       body.material = defaultMat;
       body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
       body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
       world.addBody(body);
 
       boxes.push({ mesh, body });
+      if (isGlass) {
+        body.addEventListener("collide", (event) => {
+          const impact = event.contact.getImpactVelocityAlongNormal?.() || 0;
+          if (impact <= GLASS_BREAK_THRESHOLD) return;
+          setTimeout(() => {
+            scene.remove(mesh);
+            bodiesToRemove.push(body);
+
+            const originalMat = child.material;
+            const originalMap = originalMat.map; // 컬러 텍스처
+            const originalEnv = originalMat.envMap;
+
+            const bbox = new THREE.Box3().setFromObject(child);
+            const size = bbox.getSize(new THREE.Vector3());
+            const min = bbox.min;
+
+            for (let i = 0; i < DEBRIS_COUNT; i++) {
+              const r = Math.random() * 0.02 + 0.01; // 반지름
+              const geom = new THREE.SphereGeometry(r, 6, 6);
+              const mat = new THREE.MeshStandardMaterial({
+                map: originalMap,
+                envMap: originalEnv,
+                transparent: true,
+                opacity: 1,
+                roughness: originalMat.roughness ?? 0.1,
+                metalness: originalMat.metalness ?? 0,
+              });
+              const dm = new THREE.Mesh(geom, mat);
+
+              dm.position.set(
+                min.x + Math.random() * size.x,
+                min.y + Math.random() * size.y,
+                min.z + Math.random() * size.z
+              );
+
+              const vel = new THREE.Vector3(
+                (Math.random() - 0.5) * 2,
+                Math.random() * 3 + 2,
+                (Math.random() - 0.5) * 2
+              );
+
+              debrisList.push({
+                mesh: dm,
+                velocity: vel,
+                age: 0,
+              });
+              scene.add(dm);
+            }
+          }, 500);
+        });
+      }
     }
   });
 });
@@ -535,6 +593,12 @@ function animate() {
   if (gameStart) {
     const dt = clock.getDelta();
     world.step(1 / 60, dt);
+    if (bodiesToRemove.length) {
+      bodiesToRemove.forEach((b) => {
+        world.removeBody(b);
+      });
+      bodiesToRemove.length = 0;
+    }
 
     // 메쉬와 바디 동기화
     ballMesh.position.copy(ballBody.position);
@@ -602,9 +666,25 @@ function animate() {
       div.style.left = `${(pos.x * 0.5 + 0.5) * window.innerWidth}px`;
       div.style.top = `${(-pos.y * 0.5 + 0.5) * window.innerHeight}px`;
     });
+    for (let i = debrisList.length - 1; i >= 0; i--) {
+      const d = debrisList[i];
 
+      // 위치 업데이트 (중력 가속 포함)
+      d.velocity.addScaledVector(GRAVITY, dt);
+      d.mesh.position.addScaledVector(d.velocity, dt);
+
+      // 시간 경과 및 투명도 페이드아웃
+      d.age += dt;
+      const t = d.age / DEBRIS_LIFETIME;
+      d.mesh.material.opacity = Math.max(0, 1 - t);
+
+      // 수명 초과 시 제거
+      if (d.age >= DEBRIS_LIFETIME) {
+        scene.remove(d.mesh);
+        debrisList.splice(i, 1);
+      }
+    }
     renderer.render(scene, camera);
-    scene, camera;
   }
 }
 animate();
