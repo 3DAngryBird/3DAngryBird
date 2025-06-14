@@ -370,6 +370,7 @@ const floorBody = new CANNON.Body({
   type: CANNON.Body.STATIC,
   shape: new CANNON.Box(new CANNON.Vec3(100, 0.1, 100)),
   position: new CANNON.Vec3(0, -0.1, 0),
+  material: new CANNON.Material("floorMat"),
 });
 world.addBody(floorBody);
 
@@ -438,6 +439,15 @@ const charDefaultContact = new CANNON.ContactMaterial(
     restitution: 0,
   }
 );
+const charFloorContact = new CANNON.ContactMaterial(
+  charMaterial,
+  floorBody.material,
+  {
+    friction: 10,
+    restitution: 0.0,
+  }
+);
+world.addContactMaterial(charFloorContact);
 world.addContactMaterial(charDefaultContact);
 world.solver.iterations = 100;
 world.solver.tolerance = 0;
@@ -477,13 +487,19 @@ function spawnCharacter(name, position) {
     position: new CANNON.Vec3(position.x, position.y, position.z),
     material: charMaterial,
   });
+  body.linearDamping = 0.4;
+  body.angularDamping = 0.4;
   world.addBody(body);
 
   // 3) 충돌 이벤트 처리 (기존 로직 유지)
   body.addEventListener("collide", (event) => {
     if (hasDied) return; // 이미 죽은 경우 무시
     const impact = event.contact.getImpactVelocityAlongNormal();
-    if (Math.abs(impact) > DEATH_THRESHOLD) {
+    console.log(impact);
+    if (
+      Math.abs(impact) >
+      DEATH_THRESHOLD[name == pigpath ? 0 : name == helmetpigpath ? 1 : 2]
+    ) {
       hasDied = true; // 죽음 상태로 설정
       setTimeout(() => {
         setTimeout(() => {
@@ -579,7 +595,7 @@ function spawnCharacter(name, position) {
   return mesh;
 }
 
-const DEATH_THRESHOLD = 0.5;
+const DEATH_THRESHOLD = [1, 2.5, 4];
 
 // =======================================
 //  PointerLockControls 세팅
