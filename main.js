@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
 const DEV_MODE = true;
@@ -10,7 +9,16 @@ let showLogo = false;
 
 const stageOverlay = document.getElementById("stage-overlay");
 const logoOverlay = document.getElementById("logo-overlay");
+const elCurrentStage = document.getElementById("current-stage");
+const btnResetStage = document.getElementById("reset-stage");
+const stageBtns = document.querySelectorAll(".stage-btn");
+const elThrowCount = document.getElementById("throw-count");
+const elBestScorePanel = document.getElementById("best-score-panel");
+const elCharacterCount = document.getElementById("char-count");
+const controlPanel = document.getElementById("control-panel");
 
+let throwCount = 0;
+let scoreCount = 0;
 let trajectoryLine = null;
 let cameraMode = "front"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
 const initialFrontPos = new THREE.Vector3(0, 2, 5);
@@ -33,6 +41,7 @@ let helmetpigpath = "./models/Helmetpig.glb";
 let gameStart = DEV_MODE;
 let playAnime = DEV_MODE;
 let timer = 0;
+let gltfAnimations = [];
 
 let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
 const GLASS_BREAK_THRESHOLD = 2.5;
@@ -46,12 +55,234 @@ document.querySelectorAll("#stage-buttons button").forEach((btn) => {
   btn.addEventListener("click", () => {
     selectedStage = Number(btn.dataset.stage);
     stageOverlay.style.display = "none";
+    initStage(selectedStage);
 
-    // 애니메이션 씬 재생 시작 (기존 timer 흐름 이용)
+    // 애니메이션 씬
     timer = 0;
-    playAnime = true; // animScene 재생 허용
+    playAnime = true;
+
+    elCurrentStage.textContent = selectedStage;
   });
 });
+
+stageBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const s = Number(btn.dataset.stage);
+    stageBtns.forEach((b) => {
+      const isSelected = Number(b.dataset.stage) === s;
+      b.classList.toggle("selected", isSelected);
+      console.log("Button", b.dataset.stage, "selected:", isSelected);
+
+      b.disabled = isSelected;
+    });
+    elCurrentStage.textContent = s;
+    stageBtns.forEach((b) => b.classList.toggle("selected", b === btn));
+    selectedStage = s;
+    initStage(selectedStage);
+    launchReady = false;
+    canLaunch = false;
+    launchPower = 0;
+    launchHeight = 0;
+
+    if (trajectoryLine) {
+      scene.remove(trajectoryLine);
+      trajectoryLine = null;
+    }
+
+    cameraMode = "front";
+    directionVec.set(0, 0, -1);
+    updateDirectionLine();
+    camera.position.copy(initialFrontPos);
+    camera.lookAt(initialFrontTarget);
+    playAnime = DEV_MODE;
+    showLogo = false;
+    timer = 0;
+    gameStart = DEV_MODE;
+  });
+});
+
+// Reset 버튼
+btnResetStage.addEventListener("click", () => {
+  console.log("Reset Stage", selectedStage);
+  initStage(selectedStage);
+
+  launchReady = false;
+  canLaunch = false;
+  launchPower = 0;
+  launchHeight = 0;
+
+  if (trajectoryLine) {
+    scene.remove(trajectoryLine);
+    trajectoryLine = null;
+  }
+
+  cameraMode = "front";
+  directionVec.set(0, 0, -1);
+  updateDirectionLine();
+  camera.position.copy(initialFrontPos);
+  camera.lookAt(initialFrontTarget);
+  gameStart = true;
+  showLogo = false;
+
+  // 컨트롤 패널 숨기기
+  // controlPanel.style.display = "none";
+
+  // 애니메이션 리셋 & 재생
+  if (mixer) {
+    mixer.stopAllAction();
+    gltfAnimations.forEach((clip) => {
+      mixer.clipAction(clip).reset().play();
+    });
+  }
+});
+
+function initStage(stageNumber) {
+  throwCount = 0;
+  scoreCount = 0;
+  elThrowCount.textContent = `${throwCount} (${scoreCount})`;
+  updateBestScoreDisplay();
+
+  boxes.forEach(({ mesh, body }) => {
+    scene.remove(mesh);
+    world.removeBody(body);
+  });
+  boxes.length = 0;
+
+  characters.forEach(({ mesh, body }) => {
+    scene.remove(mesh);
+    world.removeBody(body);
+  });
+  characters.length = 0;
+
+  debrisList.forEach(({ mesh }) => {
+    scene.remove(mesh);
+  });
+  debrisList.length = 0;
+
+  ballBody.position.copy(initialBallPos);
+  ballBody.velocity.setZero();
+  ballBody.angularVelocity.setZero();
+  ballBody.quaternion.set(0, 0, 0, 1);
+  ballMesh.position.copy(initialBallPos);
+
+  loader.load("./models/house.glb", (gltf) => {
+    gltf.scene.traverse((child) => {
+      if (child.isMesh) {
+        const material = child.material;
+        const matName = material.name || "defaultMat";
+        const isGlass = matName.includes("Glass");
+
+        const mesh = child.clone();
+        mesh.geometry.computeBoundingBox();
+        mesh.castShadow = true;
+        scene.add(mesh);
+
+        const worldBBox = new THREE.Box3().setFromObject(mesh);
+        const size = worldBBox.getSize(new THREE.Vector3());
+        const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
+        const shape = new CANNON.Box(halfExtents);
+
+        let mass = 1;
+        if (matName.includes("Stone")) {
+          mass = 3;
+        } else if (matName.includes("Wood")) {
+          mass = 1;
+        } else if (matName.includes("Glass")) {
+          mass = 0.5;
+        }
+        const defaultMat = world.defaultMaterial;
+        const body = new CANNON.Body({ mass: mass, shape });
+        body.material = defaultMat;
+        body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
+        body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
+        world.addBody(body);
+
+        boxes.push({ mesh, body });
+        if (isGlass) {
+          body.addEventListener("collide", (event) => {
+            const impact = event.contact.getImpactVelocityAlongNormal?.() || 0;
+            if (impact <= GLASS_BREAK_THRESHOLD) return;
+            setTimeout(() => {
+              scene.remove(mesh);
+              bodiesToRemove.push(body);
+
+              const originalMat = child.material;
+              const originalMap = originalMat.map;
+              const originalEnv = originalMat.envMap;
+
+              const bbox = new THREE.Box3().setFromObject(child);
+              const size = bbox.getSize(new THREE.Vector3());
+              const min = bbox.min;
+
+              for (let i = 0; i < DEBRIS_COUNT; i++) {
+                const r = Math.random() * 0.02 + 0.01;
+                const geom = new THREE.SphereGeometry(r, 6, 6);
+                const mat = new THREE.MeshStandardMaterial({
+                  map: originalMap,
+                  envMap: originalEnv,
+                  transparent: true,
+                  opacity: 1,
+                  roughness: originalMat.roughness ?? 0.1,
+                  metalness: originalMat.metalness ?? 0,
+                });
+                const dm = new THREE.Mesh(geom, mat);
+
+                dm.position.set(
+                  min.x + Math.random() * size.x,
+                  min.y + Math.random() * size.y,
+                  min.z + Math.random() * size.z
+                );
+
+                const vel = new THREE.Vector3(
+                  (Math.random() - 0.5) * 2,
+                  Math.random() * 3 + 2,
+                  (Math.random() - 0.5) * 2
+                );
+
+                debrisList.push({
+                  mesh: dm,
+                  velocity: vel,
+                  age: 0,
+                });
+                scene.add(dm);
+              }
+            }, 500);
+          });
+        }
+      }
+    });
+  });
+  spawnCharacter(pigpath, new THREE.Vector3(0, 0.2, 0));
+  spawnCharacter(helmetpigpath, new THREE.Vector3(1, 0.2, 0));
+}
+
+function getBestScore(stage) {
+  const v = localStorage.getItem(`stage${stage}Best`);
+  return v !== null ? Number(v) : Infinity;
+}
+
+function saveBestScore(stage, score) {
+  const prev = getBestScore(stage);
+  if (score < prev) {
+    localStorage.setItem(`stage${stage}Best`, score);
+  }
+}
+
+function updateBestScoreDisplay() {
+  const best = getBestScore(selectedStage);
+  const text = best === Infinity ? "–" : best;
+  // Control Panel
+  elBestScorePanel.textContent = text;
+  // Overlay
+  document.querySelectorAll("#stage-buttons button").forEach((btn) => {
+    const s = Number(btn.dataset.stage);
+    const span = btn.querySelector(".overlay-best");
+    if (span) {
+      const b = getBestScore(s);
+      span.textContent = b === Infinity ? "–" : b;
+    }
+  });
+}
 
 // 방향 벡터 저장
 let directionVec = new THREE.Vector3(0, 0, -1);
@@ -139,106 +370,20 @@ const floorBody = new CANNON.Body({
   type: CANNON.Body.STATIC,
   shape: new CANNON.Box(new CANNON.Vec3(100, 0.1, 100)),
   position: new CANNON.Vec3(0, -0.1, 0),
+  material: new CANNON.Material("floorMat"),
 });
 world.addBody(floorBody);
 
-// 배경(그냥 하늘색으로)
+// 배경
 scene.background = new THREE.Color(0x87ceeb);
 animScene.background = new THREE.Color(0x87ceeb);
 
 // === 구조물: GLTF 모델 로딩 ===
 const boxes = [];
 const loader = new GLTFLoader();
-loader.load("./models/house.glb", (gltf) => {
-  gltf.scene.traverse((child) => {
-    if (child.isMesh) {
-      const material = child.material;
-      const matName = material.name || "defaultMat";
-      const isGlass = matName.includes("Glass");
-
-      const mesh = child.clone();
-      mesh.geometry.computeBoundingBox();
-      mesh.castShadow = true;
-      scene.add(mesh);
-
-      const worldBBox = new THREE.Box3().setFromObject(mesh);
-      const size = worldBBox.getSize(new THREE.Vector3());
-      const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
-      const shape = new CANNON.Box(halfExtents);
-
-      let mass = 1;
-      if (matName.includes("Stone")) {
-        mass = 3;
-      } else if (matName.includes("Wood")) {
-        mass = 1;
-      } else if (matName.includes("Glass")) {
-        mass = 0.5;
-      }
-      const defaultMat = world.defaultMaterial;
-      const body = new CANNON.Body({ mass: mass, shape });
-      body.material = defaultMat;
-      body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
-      body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
-      world.addBody(body);
-
-      boxes.push({ mesh, body });
-      if (isGlass) {
-        body.addEventListener("collide", (event) => {
-          const impact = event.contact.getImpactVelocityAlongNormal?.() || 0;
-          if (impact <= GLASS_BREAK_THRESHOLD) return;
-          setTimeout(() => {
-            scene.remove(mesh);
-            bodiesToRemove.push(body);
-
-            const originalMat = child.material;
-            const originalMap = originalMat.map; // 컬러 텍스처
-            const originalEnv = originalMat.envMap;
-
-            const bbox = new THREE.Box3().setFromObject(child);
-            const size = bbox.getSize(new THREE.Vector3());
-            const min = bbox.min;
-
-            for (let i = 0; i < DEBRIS_COUNT; i++) {
-              const r = Math.random() * 0.02 + 0.01; // 반지름
-              const geom = new THREE.SphereGeometry(r, 6, 6);
-              const mat = new THREE.MeshStandardMaterial({
-                map: originalMap,
-                envMap: originalEnv,
-                transparent: true,
-                opacity: 1,
-                roughness: originalMat.roughness ?? 0.1,
-                metalness: originalMat.metalness ?? 0,
-              });
-              const dm = new THREE.Mesh(geom, mat);
-
-              dm.position.set(
-                min.x + Math.random() * size.x,
-                min.y + Math.random() * size.y,
-                min.z + Math.random() * size.z
-              );
-
-              const vel = new THREE.Vector3(
-                (Math.random() - 0.5) * 2,
-                Math.random() * 3 + 2,
-                (Math.random() - 0.5) * 2
-              );
-
-              debrisList.push({
-                mesh: dm,
-                velocity: vel,
-                age: 0,
-              });
-              scene.add(dm);
-            }
-          }, 500);
-        });
-      }
-    }
-  });
-});
 
 // 추가조명
-const ambient = new THREE.AmbientLight(0xffffff, 1.0); // 색상, 강도(0.0~1.0)
+const ambient = new THREE.AmbientLight(0xffffff, 1.0);
 const animAmbient = new THREE.AmbientLight(0xffffff, 1.0);
 scene.add(ambient);
 animScene.add(animAmbient);
@@ -246,14 +391,15 @@ animScene.add(animAmbient);
 // === 구조물: Blender Animation GLB 모델 로딩
 const loaderAnim = new GLTFLoader();
 loader.load("./models/WallAnime.glb", (gltf) => {
-  //애니메이션 관련
+  // 애니메이션 관련
   loaderAnim.load("./models/WallAnime.glb", (gltf) => {
     console.log("GLTF loaded:", gltf);
     const model = gltf.scene;
     animScene.add(model);
     mixer = new THREE.AnimationMixer(model);
+    gltfAnimations = gltf.animations;
     if (!playAnime) {
-      gltf.animations.forEach((clip) => {
+      gltfAnimations.forEach((clip) => {
         mixer.clipAction(clip).play();
       });
     }
@@ -271,20 +417,17 @@ const ballBody = new CANNON.Body({
   position: new CANNON.Vec3(0, 0.2, 3),
 });
 world.addBody(ballBody);
+function onBallLaunched() {
+  throwCount += 1;
+  if (charCount > 0) {
+    scoreCount++;
+  }
+  elThrowCount.textContent = `${throwCount} (${scoreCount})`;
+}
 
 // === 캐릭터 관리 ===
 const characters = [];
 let charCount = 0;
-
-const charCountDiv = document.createElement("div");
-charCountDiv.style.position = "absolute";
-charCountDiv.style.top = "10px";
-charCountDiv.style.left = "10px";
-charCountDiv.style.color = "white";
-charCountDiv.style.fontSize = "18px";
-charCountDiv.style.fontFamily = "sans-serif";
-charCountDiv.innerHTML = "Characters: 0";
-document.body.appendChild(charCountDiv);
 
 const charMaterial = new CANNON.Material("charMat");
 const defaultMat = world.defaultMaterial;
@@ -296,15 +439,29 @@ const charDefaultContact = new CANNON.ContactMaterial(
     restitution: 0,
   }
 );
+const charFloorContact = new CANNON.ContactMaterial(
+  charMaterial,
+  floorBody.material,
+  {
+    friction: 10,
+    restitution: 0.0,
+  }
+);
+world.addContactMaterial(charFloorContact);
 world.addContactMaterial(charDefaultContact);
-world.solver.iterations = 100; // 기본값은 10
+world.solver.iterations = 100;
 world.solver.tolerance = 0;
 
 function updateCharCount() {
-  charCountDiv.innerHTML = `Characters: ${charCount}`;
+  elCharacterCount.textContent = charCount;
+  if (charCount === 0) {
+    saveBestScore(selectedStage, scoreCount);
+    updateBestScoreDisplay();
+  }
 }
 
 function spawnCharacter(name, position) {
+  let hasDied = false;
   // 모델 파일 경로 결정
   let sizeconstant = 1.0;
   let size = 0.0;
@@ -330,12 +487,20 @@ function spawnCharacter(name, position) {
     position: new CANNON.Vec3(position.x, position.y, position.z),
     material: charMaterial,
   });
+  body.linearDamping = 0.4;
+  body.angularDamping = 0.4;
   world.addBody(body);
 
   // 3) 충돌 이벤트 처리 (기존 로직 유지)
   body.addEventListener("collide", (event) => {
+    if (hasDied) return; // 이미 죽은 경우 무시
     const impact = event.contact.getImpactVelocityAlongNormal();
-    if (Math.abs(impact) > DEATH_THRESHOLD && mesh.visible) {
+    console.log(impact);
+    if (
+      Math.abs(impact) >
+      DEATH_THRESHOLD[name == pigpath ? 0 : name == helmetpigpath ? 1 : 2]
+    ) {
+      hasDied = true; // 죽음 상태로 설정
       setTimeout(() => {
         setTimeout(() => {
           world.removeBody(body);
@@ -358,7 +523,7 @@ function spawnCharacter(name, position) {
   if (name == pigpath) {
     loader.load(pigpath, (gltf) => {
       const pigRoot = gltf.scene;
-      greenball.add(pigRoot);
+      mesh.add(pigRoot);
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
@@ -378,16 +543,16 @@ function spawnCharacter(name, position) {
   if (name == helmetpigpath) {
     loader.load(helmetpigpath, (gltf) => {
       const pigRoot = gltf.scene;
-      greenball.add(pigRoot);
+      mesh.add(pigRoot);
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
       pigRoot.scale.set(0.1, 0.1, 0.1);
 
-      // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
+      // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
         if (child.isMesh && child.material) {
-          // 색상의 밝기(V)를 0.1만큼 올리기
+          // 색 밝기를 0.1 올리기
           child.material.color.offsetHSL(0, 0, 0.1);
           child.material.needsUpdate = true;
         }
@@ -398,16 +563,16 @@ function spawnCharacter(name, position) {
   if (name == kingpigpath) {
     loader.load(kingpigpath, (gltf) => {
       const pigRoot = gltf.scene;
-      greenball.add(pigRoot);
+      mesh.add(pigRoot);
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-10 * size) / 11.0, 0);
       pigRoot.scale.set(0.1, 0.1, 0.1);
 
-      // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
+      // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
         if (child.isMesh && child.material) {
-          // 색상의 밝기(V)를 0.1만큼 올리기
+          // 색 밝기를 0.1 올리기
           child.material.color.offsetHSL(0, 0, 0.1);
           child.material.needsUpdate = true;
         }
@@ -430,10 +595,7 @@ function spawnCharacter(name, position) {
   return mesh;
 }
 
-// 빌딩 아래에 캐릭터 한 명 배치
-// spawnCharacter(new THREE.Vector3(0, 3.2, -7));
-const DEATH_THRESHOLD = 0.5;
-const greenball = spawnCharacter(helmetpigpath, new THREE.Vector3(0, 0.2, 0));
+const DEATH_THRESHOLD = [1, 2.5, 4];
 
 // =======================================
 //  PointerLockControls 세팅
@@ -540,6 +702,7 @@ window.addEventListener("mouseup", (e) => {
       launchHeight = dy * 0.01;
       launchReady = true;
       canLaunch = false;
+      onBallLaunched();
 
       setTimeout(() => {
         ballBody.position.copy(initialBallPos);
@@ -561,10 +724,11 @@ function animate() {
   requestAnimationFrame(animate);
 
   if (selectedStage == null) {
+    controlPanel.style.display = "none";
     return;
   }
   if (!gameStart) {
-    //애니메이션 파트
+    // 애니메이션 파트
     camera.position.set(10, 15, 5);
     camera.lookAt(0, 0, -5);
     const delta = clock.getDelta();
@@ -572,7 +736,6 @@ function animate() {
     renderer.render(animScene, camera);
     timer += delta;
     if (timer >= 10) {
-      // gameStart = true;
       playAnime = false;
       showLogo = true;
       timer = 0;
@@ -582,10 +745,9 @@ function animate() {
       logoOverlay.style.display = "flex";
       timer += clock.getDelta();
       if (timer >= 1) {
-        // 1초 후
         showLogo = false;
         logoOverlay.style.display = "none";
-        gameStart = true; // 게임 시작
+        gameStart = true;
       }
       return;
     }
@@ -621,7 +783,7 @@ function animate() {
       if (keys.Space) camera.translateY(cameraMovementSpeed * dt);
       if (keys.ShiftLeft) camera.translateY(-cameraMovementSpeed * dt);
       if (camera.position.y < 0.1) {
-        camera.position.y = 0.1; // 바닥에 닿지 않도록
+        camera.position.y = 0.1;
       }
     }
     // ── 드래그/발사 모드: 원래 카메라 로직 ──
@@ -660,30 +822,28 @@ function animate() {
       }
     }
 
-    // 라벨 업데이트
     axisLabels.forEach(({ div, position }) => {
       const pos = position.clone().project(camera);
       div.style.left = `${(pos.x * 0.5 + 0.5) * window.innerWidth}px`;
       div.style.top = `${(-pos.y * 0.5 + 0.5) * window.innerHeight}px`;
     });
+
     for (let i = debrisList.length - 1; i >= 0; i--) {
       const d = debrisList[i];
 
-      // 위치 업데이트 (중력 가속 포함)
       d.velocity.addScaledVector(GRAVITY, dt);
       d.mesh.position.addScaledVector(d.velocity, dt);
 
-      // 시간 경과 및 투명도 페이드아웃
       d.age += dt;
       const t = d.age / DEBRIS_LIFETIME;
       d.mesh.material.opacity = Math.max(0, 1 - t);
 
-      // 수명 초과 시 제거
       if (d.age >= DEBRIS_LIFETIME) {
         scene.remove(d.mesh);
         debrisList.splice(i, 1);
       }
     }
+    controlPanel.style.display = "block";
     renderer.render(scene, camera);
   }
 }

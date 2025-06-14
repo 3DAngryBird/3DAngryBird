@@ -80,3 +80,70 @@
     opacity: 0;
   }
 }
+
+#control-panel {
+  display: none;
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 200px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 10px;
+  border-radius: 8px;
+  font-family: sans-serif;
+  z-index: 20;
+  user-select: none;
+}
+#control-panel .panel-row {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#control-panel button {
+  background: #555;
+  border: none;
+  padding: 4px 8px;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease-in;
+}
+#control-panel button:hover {
+  background: #777;
+}
+#panel-stage-buttons {
+  display: flex;
+  gap: 4px;
+}
+#panel-stage-buttons .stage-btn.selected,
+#panel-stage-buttons .stage-btn:disabled {
+  background: #0a84ff;
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+#clear-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: #e74d3c7f;
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  z-index: 1000;
+}
+
+#clear-btn:hover {
+  background-color: #c0392b;
+}
+
+#clear-btn:active {
+  transform: translateY(1px);
+}
