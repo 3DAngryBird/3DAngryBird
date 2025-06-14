@@ -13,6 +13,7 @@ const elCurrentStage = document.getElementById("current-stage");
 const btnResetStage = document.getElementById("reset-stage");
 const stageBtns = document.querySelectorAll(".stage-btn");
 const elThrowCount = document.getElementById("throw-count");
+const elCharacterCount = document.getElementById("char-count");
 const controlPanel = document.getElementById("control-panel");
 
 let throwCount = 0;
@@ -246,6 +247,7 @@ function initStage(stageNumber) {
       }
     });
   });
+  spawnCharacter(pigpath, new THREE.Vector3(0, 0.2, 0));
 }
 
 // 방향 벡터 저장
@@ -344,93 +346,6 @@ animScene.background = new THREE.Color(0x87ceeb);
 // === 구조물: GLTF 모델 로딩 ===
 const boxes = [];
 const loader = new GLTFLoader();
-loader.load("./models/house.glb", (gltf) => {
-  gltf.scene.traverse((child) => {
-    if (child.isMesh) {
-      const material = child.material;
-      const matName = material.name || "defaultMat";
-      const isGlass = matName.includes("Glass");
-
-      const mesh = child.clone();
-      mesh.geometry.computeBoundingBox();
-      mesh.castShadow = true;
-      scene.add(mesh);
-
-      const worldBBox = new THREE.Box3().setFromObject(mesh);
-      const size = worldBBox.getSize(new THREE.Vector3());
-      const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
-      const shape = new CANNON.Box(halfExtents);
-
-      let mass = 1;
-      if (matName.includes("Stone")) {
-        mass = 3;
-      } else if (matName.includes("Wood")) {
-        mass = 1;
-      } else if (matName.includes("Glass")) {
-        mass = 0.5;
-      }
-      const defaultMat = world.defaultMaterial;
-      const body = new CANNON.Body({ mass: mass, shape });
-      body.material = defaultMat;
-      body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
-      body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
-      world.addBody(body);
-
-      boxes.push({ mesh, body });
-      if (isGlass) {
-        body.addEventListener("collide", (event) => {
-          const impact = event.contact.getImpactVelocityAlongNormal?.() || 0;
-          if (impact <= GLASS_BREAK_THRESHOLD) return;
-          setTimeout(() => {
-            scene.remove(mesh);
-            bodiesToRemove.push(body);
-
-            const originalMat = child.material;
-            const originalMap = originalMat.map;
-            const originalEnv = originalMat.envMap;
-
-            const bbox = new THREE.Box3().setFromObject(child);
-            const size = bbox.getSize(new THREE.Vector3());
-            const min = bbox.min;
-
-            for (let i = 0; i < DEBRIS_COUNT; i++) {
-              const r = Math.random() * 0.02 + 0.01;
-              const geom = new THREE.SphereGeometry(r, 6, 6);
-              const mat = new THREE.MeshStandardMaterial({
-                map: originalMap,
-                envMap: originalEnv,
-                transparent: true,
-                opacity: 1,
-                roughness: originalMat.roughness ?? 0.1,
-                metalness: originalMat.metalness ?? 0,
-              });
-              const dm = new THREE.Mesh(geom, mat);
-
-              dm.position.set(
-                min.x + Math.random() * size.x,
-                min.y + Math.random() * size.y,
-                min.z + Math.random() * size.z
-              );
-
-              const vel = new THREE.Vector3(
-                (Math.random() - 0.5) * 2,
-                Math.random() * 3 + 2,
-                (Math.random() - 0.5) * 2
-              );
-
-              debrisList.push({
-                mesh: dm,
-                velocity: vel,
-                age: 0,
-              });
-              scene.add(dm);
-            }
-          }, 500);
-        });
-      }
-    }
-  });
-});
 
 // 추가조명
 const ambient = new THREE.AmbientLight(0xffffff, 1.0);
@@ -476,16 +391,6 @@ function onBallLaunched() {
 const characters = [];
 let charCount = 0;
 
-const charCountDiv = document.createElement("div");
-charCountDiv.style.position = "absolute";
-charCountDiv.style.top = "10px";
-charCountDiv.style.left = "10px";
-charCountDiv.style.color = "white";
-charCountDiv.style.fontSize = "18px";
-charCountDiv.style.fontFamily = "sans-serif";
-charCountDiv.innerHTML = "Characters: 0";
-document.body.appendChild(charCountDiv);
-
 const charMaterial = new CANNON.Material("charMat");
 const defaultMat = world.defaultMaterial;
 const charDefaultContact = new CANNON.ContactMaterial(
@@ -501,7 +406,7 @@ world.solver.iterations = 100;
 world.solver.tolerance = 0;
 
 function updateCharCount() {
-  charCountDiv.innerHTML = `Characters: ${charCount}`;
+  elCharacterCount.textContent = charCount;
 }
 
 function spawnCharacter(name, position) {
@@ -558,7 +463,7 @@ function spawnCharacter(name, position) {
   if (name == pigpath) {
     loader.load(pigpath, (gltf) => {
       const pigRoot = gltf.scene;
-      greenball.add(pigRoot);
+      mesh.add(pigRoot);
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
@@ -578,7 +483,7 @@ function spawnCharacter(name, position) {
   if (name == helmetpigpath) {
     loader.load(helmetpigpath, (gltf) => {
       const pigRoot = gltf.scene;
-      greenball.add(pigRoot);
+      mesh.add(pigRoot);
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
@@ -598,7 +503,7 @@ function spawnCharacter(name, position) {
   if (name == kingpigpath) {
     loader.load(kingpigpath, (gltf) => {
       const pigRoot = gltf.scene;
-      greenball.add(pigRoot);
+      mesh.add(pigRoot);
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-10 * size) / 11.0, 0);
@@ -631,7 +536,6 @@ function spawnCharacter(name, position) {
 }
 
 const DEATH_THRESHOLD = 0.5;
-const greenball = spawnCharacter(helmetpigpath, new THREE.Vector3(0, 0.2, 0));
 
 // =======================================
 //  PointerLockControls 세팅
