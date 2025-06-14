@@ -4,8 +4,9 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
+const DEV_MODE = true;
 let trajectoryLine = null;
-let cameraMode = "side"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
+let cameraMode = "front"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
 let isDragging = false;
 let dragStart = null;
 let dragDeltaX = 0;
@@ -20,8 +21,8 @@ let pigpath = "./models/pig.glb";
 let kingpigpath = "./models/Kingpig.glb";
 let helmetpigpath = "./models/Helmetpig.glb";
 
-let gameStart = false;
-let playAnime = false;
+let gameStart = DEV_MODE;
+let playAnime = DEV_MODE;
 let timer = 0;
 
 // 방향 벡터 저장
@@ -116,7 +117,6 @@ world.addBody(floorBody);
 // 배경(그냥 하늘색으로)
 scene.background = new THREE.Color(0x87ceeb);
 animScene.background = new THREE.Color(0x87ceeb);
-
 
 // === 구조물: GLTF 모델 로딩 ===
 const boxes = [];
@@ -518,6 +518,7 @@ function animate() {
           scene.remove(trajectoryLine);
           trajectoryLine = null;
         }
+        updateDirectionLine();
       }
     }
 
