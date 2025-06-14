@@ -4,8 +4,18 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
+const DEV_MODE = true;
+let selectedStage = null;
+let showLogo = false;
+
+const stageOverlay = document.getElementById("stage-overlay");
+const logoOverlay = document.getElementById("logo-overlay");
+
 let trajectoryLine = null;
-let cameraMode = "side"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
+let cameraMode = "front"; // front: 정면(조준), side: 측면(발사), anim: 애니메이션
+const initialFrontPos = new THREE.Vector3(0, 2, 5);
+const initialFrontTarget = new THREE.Vector3(0, 1, 0);
+const initialBallPos = new THREE.Vector3(0, 0.2, 3);
 let isDragging = false;
 let dragStart = null;
 let dragDeltaX = 0;
@@ -20,9 +30,28 @@ let pigpath = "./models/pig.glb";
 let kingpigpath = "./models/Kingpig.glb";
 let helmetpigpath = "./models/Helmetpig.glb";
 
-let gameStart = false;
-let playAnime = false;
+let gameStart = DEV_MODE;
+let playAnime = DEV_MODE;
 let timer = 0;
+
+let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
+const GLASS_BREAK_THRESHOLD = 2.5;
+const debrisList = [];
+const DEBRIS_COUNT = 30; // 잔해 개수
+const DEBRIS_LIFETIME = 1.5; // 초 단위
+const GRAVITY = new THREE.Vector3(0, -9.82, 0);
+const bodiesToRemove = [];
+
+document.querySelectorAll("#stage-buttons button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    selectedStage = Number(btn.dataset.stage);
+    stageOverlay.style.display = "none";
+
+    // 애니메이션 씬 재생 시작 (기존 timer 흐름 이용)
+    timer = 0;
+    playAnime = true; // animScene 재생 허용
+  });
+});
 
 // 방향 벡터 저장
 let directionVec = new THREE.Vector3(0, 0, -1);
@@ -117,13 +146,16 @@ world.addBody(floorBody);
 scene.background = new THREE.Color(0x87ceeb);
 animScene.background = new THREE.Color(0x87ceeb);
 
-
 // === 구조물: GLTF 모델 로딩 ===
 const boxes = [];
 const loader = new GLTFLoader();
-loader.load("./models/test50.glb", (gltf) => {
+loader.load("./models/house.glb", (gltf) => {
   gltf.scene.traverse((child) => {
     if (child.isMesh) {
+      const material = child.material;
+      const matName = material.name || "defaultMat";
+      const isGlass = matName.includes("Glass");
+
       const mesh = child.clone();
       mesh.geometry.computeBoundingBox();
       mesh.castShadow = true;
@@ -134,15 +166,73 @@ loader.load("./models/test50.glb", (gltf) => {
       const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
       const shape = new CANNON.Box(halfExtents);
 
-      // defaultMat 정의 전에 사용하므로 임시로 기본 머티리얼
+      let mass = 1;
+      if (matName.includes("Stone")) {
+        mass = 3;
+      } else if (matName.includes("Wood")) {
+        mass = 1;
+      } else if (matName.includes("Glass")) {
+        mass = 0.5;
+      }
       const defaultMat = world.defaultMaterial;
-      const body = new CANNON.Body({ mass: 1, shape });
+      const body = new CANNON.Body({ mass: mass, shape });
       body.material = defaultMat;
       body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
       body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
       world.addBody(body);
 
       boxes.push({ mesh, body });
+      if (isGlass) {
+        body.addEventListener("collide", (event) => {
+          const impact = event.contact.getImpactVelocityAlongNormal?.() || 0;
+          if (impact <= GLASS_BREAK_THRESHOLD) return;
+          setTimeout(() => {
+            scene.remove(mesh);
+            bodiesToRemove.push(body);
+
+            const originalMat = child.material;
+            const originalMap = originalMat.map; // 컬러 텍스처
+            const originalEnv = originalMat.envMap;
+
+            const bbox = new THREE.Box3().setFromObject(child);
+            const size = bbox.getSize(new THREE.Vector3());
+            const min = bbox.min;
+
+            for (let i = 0; i < DEBRIS_COUNT; i++) {
+              const r = Math.random() * 0.02 + 0.01; // 반지름
+              const geom = new THREE.SphereGeometry(r, 6, 6);
+              const mat = new THREE.MeshStandardMaterial({
+                map: originalMap,
+                envMap: originalEnv,
+                transparent: true,
+                opacity: 1,
+                roughness: originalMat.roughness ?? 0.1,
+                metalness: originalMat.metalness ?? 0,
+              });
+              const dm = new THREE.Mesh(geom, mat);
+
+              dm.position.set(
+                min.x + Math.random() * size.x,
+                min.y + Math.random() * size.y,
+                min.z + Math.random() * size.z
+              );
+
+              const vel = new THREE.Vector3(
+                (Math.random() - 0.5) * 2,
+                Math.random() * 3 + 2,
+                (Math.random() - 0.5) * 2
+              );
+
+              debrisList.push({
+                mesh: dm,
+                velocity: vel,
+                age: 0,
+              });
+              scene.add(dm);
+            }
+          }, 500);
+        });
+      }
     }
   });
 });
@@ -427,7 +517,7 @@ window.addEventListener("mousemove", (e) => {
       directionVec.set(Math.sin(angle), 0, -Math.cos(angle));
       updateDirectionLine();
       launchPower = dx * 0.01;
-    } else if (cameraMode === "side") {
+    } else if (cameraMode === "side" && canLaunch) {
       launchHeight = dy * 0.01;
       launchPower = dx * 0.01;
       const speed = 8;
@@ -450,6 +540,16 @@ window.addEventListener("mouseup", (e) => {
       launchHeight = dy * 0.01;
       launchReady = true;
       canLaunch = false;
+
+      setTimeout(() => {
+        ballBody.position.copy(initialBallPos);
+        ballBody.velocity.setZero();
+        ballBody.angularVelocity.setZero();
+        ballBody.quaternion.set(0, 0, 0, 1);
+        ballMesh.position.copy(initialBallPos);
+        ballMesh.quaternion.set(0, 0, 0, 1);
+        canLaunch = true;
+      }, WAIT_AFTER_THROW);
     }
   }
 });
@@ -459,9 +559,46 @@ window.addEventListener("mouseup", (e) => {
 // =======================================
 function animate() {
   requestAnimationFrame(animate);
+
+  if (selectedStage == null) {
+    return;
+  }
+  if (!gameStart) {
+    //애니메이션 파트
+    camera.position.set(10, 15, 5);
+    camera.lookAt(0, 0, -5);
+    const delta = clock.getDelta();
+    if (mixer) mixer.update(delta);
+    renderer.render(animScene, camera);
+    timer += delta;
+    if (timer >= 10) {
+      // gameStart = true;
+      playAnime = false;
+      showLogo = true;
+      timer = 0;
+    }
+
+    if (showLogo) {
+      logoOverlay.style.display = "flex";
+      timer += clock.getDelta();
+      if (timer >= 1) {
+        // 1초 후
+        showLogo = false;
+        logoOverlay.style.display = "none";
+        gameStart = true; // 게임 시작
+      }
+      return;
+    }
+  }
   if (gameStart) {
     const dt = clock.getDelta();
     world.step(1 / 60, dt);
+    if (bodiesToRemove.length) {
+      bodiesToRemove.forEach((b) => {
+        world.removeBody(b);
+      });
+      bodiesToRemove.length = 0;
+    }
 
     // 메쉬와 바디 동기화
     ballMesh.position.copy(ballBody.position);
@@ -483,6 +620,9 @@ function animate() {
       if (keys.KeyD) pointerControls.moveRight(cameraMovementSpeed * dt);
       if (keys.Space) camera.translateY(cameraMovementSpeed * dt);
       if (keys.ShiftLeft) camera.translateY(-cameraMovementSpeed * dt);
+      if (camera.position.y < 0.1) {
+        camera.position.y = 0.1; // 바닥에 닿지 않도록
+      }
     }
     // ── 드래그/발사 모드: 원래 카메라 로직 ──
     else {
@@ -510,14 +650,13 @@ function animate() {
         trajectoryLine = createTrajectoryLine(new THREE.Vector3(0, 1, 3), v);
         scene.add(trajectoryLine);
       } else {
-        const camOffset = new THREE.Vector3(0, 1.5, 4);
-        camera.position.copy(ballMesh.position).add(camOffset);
-        const lookTarget = ballMesh.position.clone().add(directionVec);
-        camera.lookAt(lookTarget);
+        camera.position.copy(initialFrontPos);
+        camera.lookAt(initialFrontTarget);
         if (trajectoryLine) {
           scene.remove(trajectoryLine);
           trajectoryLine = null;
         }
+        updateDirectionLine();
       }
     }
 
@@ -527,20 +666,25 @@ function animate() {
       div.style.left = `${(pos.x * 0.5 + 0.5) * window.innerWidth}px`;
       div.style.top = `${(-pos.y * 0.5 + 0.5) * window.innerHeight}px`;
     });
+    for (let i = debrisList.length - 1; i >= 0; i--) {
+      const d = debrisList[i];
 
-    renderer.render(scene, camera);
-    scene, camera;
-  } else {
-    //애니메이션 파트
-    camera.position.set(10, 15, 5);
-    camera.lookAt(0, 0, -5);
-    const delta = clock.getDelta();
-    if (mixer) mixer.update(delta);
-    renderer.render(animScene, camera);
-    timer += delta;
-    if (timer >= 10) {
-      gameStart = true;
+      // 위치 업데이트 (중력 가속 포함)
+      d.velocity.addScaledVector(GRAVITY, dt);
+      d.mesh.position.addScaledVector(d.velocity, dt);
+
+      // 시간 경과 및 투명도 페이드아웃
+      d.age += dt;
+      const t = d.age / DEBRIS_LIFETIME;
+      d.mesh.material.opacity = Math.max(0, 1 - t);
+
+      // 수명 초과 시 제거
+      if (d.age >= DEBRIS_LIFETIME) {
+        scene.remove(d.mesh);
+        debrisList.splice(i, 1);
+      }
     }
+    renderer.render(scene, camera);
   }
 }
 animate();
