@@ -143,9 +143,12 @@ animScene.background = new THREE.Color(0x87ceeb);
 // === 구조물: GLTF 모델 로딩 ===
 const boxes = [];
 const loader = new GLTFLoader();
-loader.load("./models/test50.glb", (gltf) => {
+loader.load("./models/house.glb", (gltf) => {
   gltf.scene.traverse((child) => {
     if (child.isMesh) {
+      const material = child.material;
+      const matName = material.name || "defaultMat";
+
       const mesh = child.clone();
       mesh.geometry.computeBoundingBox();
       mesh.castShadow = true;
@@ -156,7 +159,14 @@ loader.load("./models/test50.glb", (gltf) => {
       const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
       const shape = new CANNON.Box(halfExtents);
 
-      // defaultMat 정의 전에 사용하므로 임시로 기본 머티리얼
+      let mess = 1;
+      if (matName.includes("Stone")) {
+        mess = 3;
+      } else if (matName.includes("Wood")) {
+        mess = 1;
+      } else if (matName.includes("Glass")) {
+        mess = 0.5;
+      }
       const defaultMat = world.defaultMaterial;
       const body = new CANNON.Body({ mass: 1, shape });
       body.material = defaultMat;
