@@ -3,7 +3,7 @@ import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
-const DEV_MODE = false;
+const DEV_MODE = true;
 let selectedStage = null;
 let showLogo = false;
 
@@ -52,6 +52,7 @@ document.querySelectorAll("#stage-buttons button").forEach((btn) => {
   btn.addEventListener("click", () => {
     selectedStage = Number(btn.dataset.stage);
     stageOverlay.style.display = "none";
+    initStage(selectedStage);
 
     // 애니메이션 씬
     timer = 0;
@@ -74,6 +75,22 @@ stageBtns.forEach((btn) => {
     elCurrentStage.textContent = s;
     stageBtns.forEach((b) => b.classList.toggle("selected", b === btn));
     selectedStage = s;
+    initStage(selectedStage);
+    launchReady = false;
+    canLaunch = false;
+    launchPower = 0;
+    launchHeight = 0;
+
+    if (trajectoryLine) {
+      scene.remove(trajectoryLine);
+      trajectoryLine = null;
+    }
+
+    cameraMode = "front";
+    directionVec.set(0, 0, -1);
+    updateDirectionLine();
+    camera.position.copy(initialFrontPos);
+    camera.lookAt(initialFrontTarget);
     playAnime = DEV_MODE;
     showLogo = false;
     timer = 0;
@@ -81,14 +98,31 @@ stageBtns.forEach((btn) => {
   });
 });
 
-// Reset 버튼 (기능 구현 전 더미)
+// Reset 버튼
 btnResetStage.addEventListener("click", () => {
   console.log("Reset Stage", selectedStage);
+  initStage(selectedStage);
+
+  launchReady = false;
+  canLaunch = false;
+  launchPower = 0;
+  launchHeight = 0;
+
+  if (trajectoryLine) {
+    scene.remove(trajectoryLine);
+    trajectoryLine = null;
+  }
+
+  cameraMode = "front";
+  directionVec.set(0, 0, -1);
+  updateDirectionLine();
+  camera.position.copy(initialFrontPos);
+  camera.lookAt(initialFrontTarget);
   gameStart = true;
   showLogo = false;
 
   // 컨트롤 패널 숨기기
-  controlPanel.style.display = "none";
+  // controlPanel.style.display = "none";
 
   // 애니메이션 리셋 & 재생
   if (mixer) {
@@ -98,6 +132,121 @@ btnResetStage.addEventListener("click", () => {
     });
   }
 });
+
+function initStage(stageNumber) {
+  boxes.forEach(({ mesh, body }) => {
+    scene.remove(mesh);
+    world.removeBody(body);
+  });
+  boxes.length = 0;
+
+  characters.forEach(({ mesh, body }) => {
+    scene.remove(mesh);
+    world.removeBody(body);
+  });
+  characters.length = 0;
+
+  debrisList.forEach(({ mesh }) => {
+    scene.remove(mesh);
+  });
+  debrisList.length = 0;
+
+  throwCount = 0;
+  elThrowCount.textContent = throwCount;
+  ballBody.position.copy(initialBallPos);
+  ballBody.velocity.setZero();
+  ballBody.angularVelocity.setZero();
+  ballBody.quaternion.set(0, 0, 0, 1);
+  ballMesh.position.copy(initialBallPos);
+
+  loader.load("./models/house.glb", (gltf) => {
+    gltf.scene.traverse((child) => {
+      if (child.isMesh) {
+        const material = child.material;
+        const matName = material.name || "defaultMat";
+        const isGlass = matName.includes("Glass");
+
+        const mesh = child.clone();
+        mesh.geometry.computeBoundingBox();
+        mesh.castShadow = true;
+        scene.add(mesh);
+
+        const worldBBox = new THREE.Box3().setFromObject(mesh);
+        const size = worldBBox.getSize(new THREE.Vector3());
+        const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
+        const shape = new CANNON.Box(halfExtents);
+
+        let mass = 1;
+        if (matName.includes("Stone")) {
+          mass = 3;
+        } else if (matName.includes("Wood")) {
+          mass = 1;
+        } else if (matName.includes("Glass")) {
+          mass = 0.5;
+        }
+        const defaultMat = world.defaultMaterial;
+        const body = new CANNON.Body({ mass: mass, shape });
+        body.material = defaultMat;
+        body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
+        body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
+        world.addBody(body);
+
+        boxes.push({ mesh, body });
+        if (isGlass) {
+          body.addEventListener("collide", (event) => {
+            const impact = event.contact.getImpactVelocityAlongNormal?.() || 0;
+            if (impact <= GLASS_BREAK_THRESHOLD) return;
+            setTimeout(() => {
+              scene.remove(mesh);
+              bodiesToRemove.push(body);
+
+              const originalMat = child.material;
+              const originalMap = originalMat.map;
+              const originalEnv = originalMat.envMap;
+
+              const bbox = new THREE.Box3().setFromObject(child);
+              const size = bbox.getSize(new THREE.Vector3());
+              const min = bbox.min;
+
+              for (let i = 0; i < DEBRIS_COUNT; i++) {
+                const r = Math.random() * 0.02 + 0.01;
+                const geom = new THREE.SphereGeometry(r, 6, 6);
+                const mat = new THREE.MeshStandardMaterial({
+                  map: originalMap,
+                  envMap: originalEnv,
+                  transparent: true,
+                  opacity: 1,
+                  roughness: originalMat.roughness ?? 0.1,
+                  metalness: originalMat.metalness ?? 0,
+                });
+                const dm = new THREE.Mesh(geom, mat);
+
+                dm.position.set(
+                  min.x + Math.random() * size.x,
+                  min.y + Math.random() * size.y,
+                  min.z + Math.random() * size.z
+                );
+
+                const vel = new THREE.Vector3(
+                  (Math.random() - 0.5) * 2,
+                  Math.random() * 3 + 2,
+                  (Math.random() - 0.5) * 2
+                );
+
+                debrisList.push({
+                  mesh: dm,
+                  velocity: vel,
+                  age: 0,
+                });
+                scene.add(dm);
+              }
+            }, 500);
+          });
+        }
+      }
+    });
+  });
+}
 
 // 방향 벡터 저장
 let directionVec = new THREE.Vector3(0, 0, -1);
