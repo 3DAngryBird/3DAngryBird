@@ -449,7 +449,7 @@ window.addEventListener("mousemove", (e) => {
       directionVec.set(Math.sin(angle), 0, -Math.cos(angle));
       updateDirectionLine();
       launchPower = dx * 0.01;
-    } else if (cameraMode === "side") {
+    } else if (cameraMode === "side" && canLaunch) {
       launchHeight = dy * 0.01;
       launchPower = dx * 0.01;
       const speed = 8;
@@ -480,7 +480,7 @@ window.addEventListener("mouseup", (e) => {
         ballBody.quaternion.set(0, 0, 0, 1);
         ballMesh.position.copy(initialBallPos);
         ballMesh.quaternion.set(0, 0, 0, 1);
-        c;
+        canLaunch = true;
       }, WAIT_AFTER_THROW);
     }
   }
