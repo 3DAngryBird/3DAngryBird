@@ -40,5 +40,29 @@
     <div id="logo-overlay" class="overlay" style="display: none">
       <img src="./logo.png" alt="Loading" />
     </div>
+
+    <div id="control-panel">
+      <div class="panel-row">
+        <span>Stage:</span>
+        <span id="current-stage">1</span>
+      </div>
+      <div class="panel-row">
+        <button id="reset-stage">Reset Stage</button>
+      </div>
+      <div class="panel-row">
+        <span>Select Stage:</span>
+        <div id="panel-stage-buttons">
+          <button data-stage="1" class="stage-btn selected">1</button>
+          <button data-stage="2" class="stage-btn">2</button>
+          <button data-stage="3" class="stage-btn">3</button>
+          <button data-stage="4" class="stage-btn">4</button>
+          <button data-stage="5" class="stage-btn">5</button>
+        </div>
+      </div>
+      <div class="panel-row">
+        <span>Throws:</span>
+        <span id="throw-count">0</span>
+      </div>
+    </div>
   </body>
 </html>
