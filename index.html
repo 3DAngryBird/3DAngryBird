@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>3D AngryBall</title>
+    <link rel="stylesheet" href="style.css" />
     <style>
       body {
         margin: 0;
@@ -24,5 +25,20 @@
       }
     </script>
     <script type="module" src="main.js"></script>
+
+    <div id="stage-overlay" class="overlay">
+      <h1>Stage 선택하기</h1>
+      <div id="stage-buttons" class="buttons">
+        <div><button data-stage="1">1</button><br /><small>Best: -</small></div>
+        <div><button data-stage="2">2</button><br /><small>Best: -</small></div>
+        <div><button data-stage="3">3</button><br /><small>Best: -</small></div>
+        <div><button data-stage="4">4</button><br /><small>Best: -</small></div>
+        <div><button data-stage="5">5</button><br /><small>Best: -</small></div>
+      </div>
+    </div>
+
+    <div id="logo-overlay" class="overlay" style="display: none">
+      <img src="./logo.png" alt="Loading" />
+    </div>
   </body>
 </html>
