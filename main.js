@@ -3,7 +3,7 @@ import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
-const DEV_MODE = true;
+const DEV_MODE = false;
 let selectedStage = null;
 let showLogo = false;
 
@@ -48,6 +48,7 @@ let gameStart = DEV_MODE;
 let playAnime = DEV_MODE;
 let timer = 0;
 let gltfAnimations = [];
+let currentAnimatedModel = null; 
 
 let clouds = []; // 구름 모델들을 저장할 배열
 const cloud1Path = "./models/backgrounds/cloud1.glb";
@@ -216,6 +217,15 @@ function initStage(stageNumber) {
     scene.remove(mesh);
   });
   clouds.length = 0;
+  if (currentAnimatedModel) {
+    animScene.remove(currentAnimatedModel);
+    currentAnimatedModel = null;
+  }
+  if(mixer) {
+    mixer.stopAllAction();
+    mixer = null;
+  }
+  gltfAnimations = [];
 
   ballBody.position.copy(initialBallPos);
   ballBody.velocity.setZero();
@@ -319,6 +329,36 @@ function initStage(stageNumber) {
         }
       }
     });
+  });
+
+  let animFp;
+  if (stageNumber == 1) {
+    animFp = "./models/buildings/animations/WallAnime.glb";
+  } else if (stageNumber == 2) {
+    // 참고: 각 스테이지에 맞는 애니메이션 파일이 실제로 존재해야 합니다.
+    // 여기서는 예시로 WallAnime.glb을 사용하며, 실제 파일명으로 변경해야 합니다.
+    animFp = "./models/buildings/animations/PotAnime.glb"; // 예시 파일명
+  } else if (stageNumber == 3) {
+    animFp = "./models/buildings/animations/GlassTowerAnime.glb"; // 예시 파일명
+  } else {
+    animFp = "./models/buildings/animations/HouseAnime.glb"; // 예시 파일명
+  }
+
+  loader.load(animFp, (gltf) => {
+    console.log(`Animation for stage ${stageNumber} loaded from ${animFp}`);
+    const model = gltf.scene;
+    animScene.add(model);
+    currentAnimatedModel = model; // 새로 로드된 모델을 추적
+
+    mixer = new THREE.AnimationMixer(model);
+    gltfAnimations = gltf.animations;
+
+    if (gltfAnimations.length > 0) {
+      gltfAnimations.forEach((clip) => {
+        // 애니메이션 루프에서 업데이트되므로 여기서는 재생만 호출합니다.
+        mixer.clipAction(clip).play();
+      });
+    }
   });
 
   // 구름 모델 로드 및 무작위 배치
@@ -560,24 +600,6 @@ const ambient = new THREE.AmbientLight(0xffffff, 1.0);
 const animAmbient = new THREE.AmbientLight(0xffffff, 1.0);
 scene.add(ambient);
 animScene.add(animAmbient);
-
-// === 구조물: Blender Animation GLB 모델 로딩
-const loaderAnim = new GLTFLoader();
-loader.load("./models/buildings/animations/WallAnime.glb", (gltf) => {
-  // 애니메이션 관련
-  loaderAnim.load("./models/buildings/animations/WallAnime.glb", (gltf) => {
-    console.log("GLTF loaded:", gltf);
-    const model = gltf.scene;
-    animScene.add(model);
-    mixer = new THREE.AnimationMixer(model);
-    gltfAnimations = gltf.animations;
-    if (!playAnime) {
-      gltfAnimations.forEach((clip) => {
-        mixer.clipAction(clip).play();
-      });
-    }
-  });
-});
 
 let birdMesh;
 // === Bird 모델 로드 ===
