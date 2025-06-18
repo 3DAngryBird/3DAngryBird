@@ -421,7 +421,7 @@ function initStage(stageNumber) {
     spawnCharacter(pigpath, new THREE.Vector3(0, 0, 1), 1.5);
     spawnCharacter(helmetpigpath, new THREE.Vector3(5, 0, -2.5), 1.5);
     spawnCharacter(helmetpigpath, new THREE.Vector3(-5, 0, -2.5), 1.5);
-    spawnCharacter(kingpigpath, new THREE.Vector3(0, 2.75, -7.45), 2);
+    spawnCharacter(kingpigpath, new THREE.Vector3(0, 2.75, -7.35), 2);
     spawnCharacter(pigpath, new THREE.Vector3(0, 0, -13.5), 1.5)
   }
 
