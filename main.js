@@ -3,7 +3,7 @@ import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
-const DEV_MODE = true;
+const DEV_MODE = false;
 let selectedStage = null;
 let showLogo = false;
 
@@ -420,7 +420,7 @@ function initStage(stageNumber) {
     spawnCharacter(pigpath, new THREE.Vector3(0, 0, 1), 1.5);
     spawnCharacter(helmetpigpath, new THREE.Vector3(5, 0, -2.5), 1.5);
     spawnCharacter(helmetpigpath, new THREE.Vector3(-5, 0, -2.5), 1.5);
-    spawnCharacter(kingpigpath, new THREE.Vector3(0, 2.75, -7.25), 2);
+    spawnCharacter(kingpigpath, new THREE.Vector3(0, 2.75, -7.45), 2);
     spawnCharacter(pigpath, new THREE.Vector3(0, 0, -13.5), 1.5)
   }
 
