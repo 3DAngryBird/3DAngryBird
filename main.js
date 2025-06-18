@@ -3,7 +3,7 @@ import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
-const DEV_MODE = false;
+const DEV_MODE = true;
 let selectedStage = null;
 let showLogo = false;
 
@@ -54,7 +54,7 @@ const cloud1Path = "./models/backgrounds/cloud1.glb";
 const cloud2Path = "./models/backgrounds/cloud2.glb";
 
 let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
-const GLASS_BREAK_THRESHOLD = 3.5;
+const GLASS_BREAK_THRESHOLD = 5;
 const debrisList = [];
 const DEBRIS_COUNT = 30; // 잔해 개수
 const DEBRIS_LIFETIME = 1.5; // 초 단위
@@ -370,9 +370,45 @@ function initStage(stageNumber) {
   loadAndPlaceClouds(cloud1Path, numClouds / 10, clouds, 2.5, 3.5); // 첫 번째 구름 모델
   loadAndPlaceClouds(cloud2Path, numClouds, clouds, 2.5, 4); // 두 번째 구름 모델
 
-  spawnCharacter(pigpath, new THREE.Vector3(0, 0, 0), 2);
-  spawnCharacter(helmetpigpath, new THREE.Vector3(2, 0, 0), 2);
-  spawnCharacter(kingpigpath, new THREE.Vector3(4, 0, 0), 2);
+  if (selectedStage == 1) {
+    spawnCharacter(pigpath, new THREE.Vector3(0, 0, 1), 1.5);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(5, 0, -2.5), 1.5);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-5, 0, -2.5), 1.5);
+    spawnCharacter(kingpigpath, new THREE.Vector3(0, 2.75, -7.45), 2);
+    spawnCharacter(pigpath, new THREE.Vector3(0, 0, -13.5), 1.5)
+  }
+
+
+  if (selectedStage == 2) {
+    spawnCharacter(pigpath, new THREE.Vector3(0, 0, -7.52), 1);
+    spawnCharacter(pigpath, new THREE.Vector3(0, 0, -2.64), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(3, 0, -5), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-3, 0, -5), 2);
+  }
+
+  if(selectedStage == 3) {
+    spawnCharacter(helmetpigpath, new THREE.Vector3(0, 0, 1.3), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-1.54, 10, -5.19), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(1.54, 10, -5.19), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-1.54, 10, -7.45), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(1.54, 10, -7.45), 2);
+    spawnCharacter(kingpigpath, new THREE.Vector3(0, 10, -7.45), 2);
+  }
+  if(selectedStage == 4) {
+    spawnCharacter(pigpath, new THREE.Vector3(3, 0, -5.46), 1);
+    spawnCharacter(pigpath, new THREE.Vector3(-3, 0, -5.46), 1);
+    spawnCharacter(kingpigpath, new THREE.Vector3(0, 0, -10), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(0, 4, -1.13), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-3, 4.38, -4.8), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(3, 4.38, -4.8), 2);
+
+  }
+
+
+  // spawnCharacter(pigpath, new THREE.Vector3(-0.18, 0, -7.52), 2);
+  // spawnCharacter(helmetpigpath, new THREE.Vector3(2, 0, 0), 2);
+  // spawnCharacter(kingpigpath, new THREE.Vector3(4, 0, 0), 2);
+
 }
 
 function getBestScore(stage) {
@@ -682,6 +718,7 @@ function spawnCharacter(name, position, scale) {
         0.1 * sizeconstant,
         0.1 * sizeconstant
       );
+      pigRoot.rotation.y = -Math.PI;
 
       // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
       pigRoot.traverse((child) => {
@@ -706,6 +743,7 @@ function spawnCharacter(name, position, scale) {
         0.1 * sizeconstant,
         0.1 * sizeconstant
       );
+      pigRoot.rotation.y = -Math.PI;
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
@@ -730,6 +768,7 @@ function spawnCharacter(name, position, scale) {
         0.1 * sizeconstant,
         0.1 * sizeconstant
       );
+      pigRoot.rotation.y = -Math.PI;
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
@@ -757,7 +796,7 @@ function spawnCharacter(name, position, scale) {
   return mesh;
 }
 
-const DEATH_THRESHOLD = [1, 2.5, 4];
+const DEATH_THRESHOLD = [6, 10, 16];
 
 // =======================================
 //  PointerLockControls 세팅
@@ -976,6 +1015,9 @@ function animate() {
           Math.max(-50, Math.min(50, camera.position.z))
         );
       }
+      console.log(
+        `Camera Position: X=${camera.position.x.toFixed(2)}, Y=${camera.position.y.toFixed(2)}, Z=${camera.position.z.toFixed(2)}`
+      );
     }
     // ── 드래그/발사 모드: 원래 카메라 로직 ──
     else {
