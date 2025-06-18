@@ -139,6 +139,9 @@ stageBtns.forEach((btn) => {
     camera.lookAt(initialFrontTarget);
     animTimer = 0;
     playAnime = !DEV_MODE;
+    controlPanel.style.display = "none";
+    logoPanel.style.display = "none";
+    modePanel.style.display = "none";
     showLogo = false;
     timer = 0;
     gameStart = !playAnime;
@@ -909,7 +912,7 @@ function animate() {
       logoOverlay.style.display = "none";
       showLogo = false;
       gameStart = true;
-      logoTimer = 0; // 반드시 초 기화
+      logoTimer = 0;
     } else {
       renderer.render(scene, camera);
     }
