@@ -137,10 +137,17 @@ stageBtns.forEach((btn) => {
     updateDirectionLine();
     camera.position.copy(initialFrontPos);
     camera.lookAt(initialFrontTarget);
-    playAnime = DEV_MODE;
+    animTimer = 0;
+    playAnime = !DEV_MODE;
     showLogo = false;
     timer = 0;
-    gameStart = DEV_MODE;
+    gameStart = !playAnime;
+    if (mixer) {
+      mixer.stopAllAction();
+      gltfAnimations.forEach((clip) => {
+        mixer.clipAction(clip).reset().play();
+      });
+    }
   });
 });
 
@@ -180,9 +187,11 @@ btnResetStage.addEventListener("click", () => {
 });
 
 function initStage(stageNumber) {
+  timer = 0;
   throwCount = 0;
   scoreCount = 0;
   elThrowCount.textContent = `${throwCount} (${scoreCount})`;
+  stageBtns[stageNumber - 1].classList.add("selected");
   updateBestScoreDisplay();
 
   boxes.forEach(({ mesh, body }) => {
@@ -218,7 +227,6 @@ function initStage(stageNumber) {
   } else {
     fp = new String("./models/buildings/House.glb");
   }
-
   loader.load(fp, (gltf) => {
     gltf.scene.traverse((child) => {
       if (child.isMesh) {
@@ -895,7 +903,7 @@ function animate() {
     mixer?.update(delta);
     renderer.render(animScene, camera);
 
-    if (animTimer >= 8) {
+    if (animTimer >= 3) {
       // 정확히 8초 동안만
       logoTimer = 0; // 로고 타이머도 초기화
       playAnime = false;
