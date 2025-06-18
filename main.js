@@ -345,10 +345,9 @@ function initStage(stageNumber) {
     animFp = "./models/buildings/animations/PotAnime.glb"; // 예시 파일명
   } else if (stageNumber == 3) {
     animFp = "./models/buildings/animations/GlassTowerAnime.glb"; // 예시 파일명
-  } else if (stageNumber == 4) {
-    animFp = "./models/buildings/animations/HouseAnime.glb"; // 예시 파일명
   } else {
-    animFp = "./models/buildings/animations/DominoAnime.glb";
+    animFp = "./models/buildings/animations/HouseAnime.glb"; // 예시 파일명
+  }
 
   loader.load(animFp, (gltf) => {
     console.log(`Animation for stage ${stageNumber} loaded from ${animFp}`);
@@ -444,19 +443,11 @@ function initStage(stageNumber) {
     spawnCharacter(pigpath, new THREE.Vector3(3, 0, -5.46), 1);
     spawnCharacter(pigpath, new THREE.Vector3(-3, 0, -5.46), 1);
     spawnCharacter(kingpigpath, new THREE.Vector3(0, 0, -10), 2);
-    spawnCharacter(helmetpigpath, new THREE.Vector3(0, 3, -1.13), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(0, 4, -1.13), 2);
     spawnCharacter(helmetpigpath, new THREE.Vector3(-3, 4.38, -4.8), 2);
     spawnCharacter(helmetpigpath, new THREE.Vector3(3, 4.38, -4.8), 2);
 
   }
-  if (selectedStage == 5) {
-    spawnCharacter(pigpath, new THREE.Vector3(0, 0, -10), 1);
-    spawnCharacter(helmetpigpath, new THREE.Vector3(0, 0, -12.25), 2);
-    spawnCharacter(helmetpigpath, new THREE.Vector3(0, 3.4, -14.45), 2);
-    spawnCharacter(kingpigpath, new THREE.Vector3(0, 0, -17.8), 2);
-
-  }
-
 
 
   // spawnCharacter(pigpath, new THREE.Vector3(-0.18, 0, -7.52), 2);
@@ -832,9 +823,7 @@ function spawnCharacter(name, position, scale) {
   return mesh;
 }
 
-
-const DEATH_THRESHOLD = [3.5, 5, 8];
-
+const DEATH_THRESHOLD = [3, 6, 8];
 
 // =======================================
 //  PointerLockControls 세팅
