@@ -202,6 +202,12 @@ function initStage(stageNumber) {
   });
   debrisList.length = 0;
 
+  // 기존 구름 제거
+  clouds.forEach(mesh => {
+      scene.remove(mesh);
+  });
+  clouds.length = 0; 
+
   ballBody.position.copy(initialBallPos);
   ballBody.velocity.setZero();
   ballBody.angularVelocity.setZero();
