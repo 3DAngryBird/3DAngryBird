@@ -349,7 +349,6 @@ function initStage(stageNumber) {
     animFp = "./models/buildings/animations/HouseAnime.glb"; // 예시 파일명
   } else {
     animFp = "./models/buildings/animations/DominoAnime.glb";
-  }
 
   loader.load(animFp, (gltf) => {
     console.log(`Animation for stage ${stageNumber} loaded from ${animFp}`);
@@ -457,6 +456,7 @@ function initStage(stageNumber) {
     spawnCharacter(kingpigpath, new THREE.Vector3(0, 0, -17.8), 2);
 
   }
+
 
 
   // spawnCharacter(pigpath, new THREE.Vector3(-0.18, 0, -7.52), 2);
@@ -832,7 +832,9 @@ function spawnCharacter(name, position, scale) {
   return mesh;
 }
 
+
 const DEATH_THRESHOLD = [3.5, 5, 8];
+
 
 // =======================================
 //  PointerLockControls 세팅
