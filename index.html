@@ -70,17 +70,34 @@
     </div>
 
     <div id="logo-overlay" class="overlay" style="display: none">
-      <img src="./logo.png" alt="Loading" />
+      <img src="./models/logo-background.png" alt="Loading" />
+    </div>
+
+    <div id="logo-panel" style="display: none">
+      <img
+        src="./models/logo-transparent.png"
+        alt="AngryBall Logo"
+        style="width: 10vw; height: 10vw"
+      />
+      <div class="logo-text"></div>
+    </div>
+
+    <div id="mode-panel">
+      <button id="btn-mode-f" class="mode-btn">F</button>
+      <button id="btn-mode-c" class="mode-btn">C</button>
+      <span id="mode-label">Angle</span>
+      <button id="btn-mode-help" class="help-btn">
+        <img src="./help.png" style="width: 20px; height: 20px" />
+      </button>
     </div>
 
     <div id="control-panel">
       <div class="panel-row">
         <span>Stage:</span>
         <span id="current-stage">1</span>
-      </div>
-      <div class="panel-row">
         <button id="reset-stage">Reset Stage</button>
       </div>
+      <div class="panel-row"></div>
       <div class="panel-row">
         <span>Select Stage:</span>
         <div id="panel-stage-buttons">
@@ -91,6 +108,8 @@
           <button data-stage="5" class="stage-btn">5</button>
         </div>
       </div>
+      <div class="panel-row"></div>
+
       <div class="panel-row">
         <span>Throws:</span>
         <span id="throw-count">0</span>
@@ -102,6 +121,32 @@
       <div class="panel-row">
         <span>Best:</span>
         <span id="best-score-panel">–</span>
+      </div>
+    </div>
+    <div id="mode-modal" class="modal-overlay" style="display: none">
+      <div class="modal">
+        <h2>모드 설명</h2>
+        <ul>
+          <li>
+            <strong>F (FPS)</strong> <br />
+            <br />
+            마우스 이동으로 시야를 조작할 수 있습니다. W, A, S, D 키로
+            이동합니다. Space 키로 올라가고, Shift 키로 내려옵니다. F 키나 Esc
+            키로 해제합니다.
+          </li>
+          <br />
+          <br />
+          <li>
+            <strong>C (Camera)</strong><br />
+            <br />
+            C 키로 Angle / Throw 뷰를 전환합니다. FPS 모드에서는 C 키가 눌리지
+            않으니 Focus 모드를 해제하고 사용해 주세요.
+            <br />
+            Angle 모드에서 발사각을 지정하고 Throw 모드에서 드래그를 통해 새를
+            날려 주세요.
+          </li>
+        </ul>
+        <button id="btn-modal-close">닫기</button>
       </div>
     </div>
     <script>
