@@ -212,10 +212,10 @@ function initStage(stageNumber) {
   debrisList.length = 0;
 
   // 기존 구름 제거
-  clouds.forEach(mesh => {
-      scene.remove(mesh);
+  clouds.forEach((mesh) => {
+    scene.remove(mesh);
   });
-  clouds.length = 0; 
+  clouds.length = 0;
 
   ballBody.position.copy(initialBallPos);
   ballBody.velocity.setZero();
@@ -909,14 +909,13 @@ function animate() {
     mixer?.update(delta);
     renderer.render(animScene, camera);
 
-    if (animTimer >= 3) {
-      // 정확히 8초 동안만
-      logoTimer = 0; // 로고 타이머도 초기화
+    if (animTimer >= 8) {
+      logoTimer = 0;
       playAnime = false;
       showLogo = true;
-      animTimer = 0; // 반드시 초기화
+      animTimer = 0;
     }
-    return; // 애니메이션 구간 동안만 이 블록 실행
+    return;
   } else if (gameStart) {
     const dt = clock.getDelta();
     world.step(1 / 60, dt);
