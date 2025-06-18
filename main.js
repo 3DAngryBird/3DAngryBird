@@ -230,8 +230,10 @@ function initStage(stageNumber) {
     fp = new String("./models/buildings/Pot.glb");
   } else if (stageNumber == 3) {
     fp = new String("./models/buildings/GlassTower.glb");
-  } else {
+  } else if(stageNumber==4){
     fp = new String("./models/buildings/House.glb");
+  }else{
+    fp = new String("./models/buildings/Domino.glb");
   }
   loader.load(fp, (gltf) => {
     gltf.scene.traverse((child) => {
