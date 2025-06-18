@@ -34,17 +34,15 @@ const initialFrontTarget = new THREE.Vector3(0, 1, 0);
 const initialBallPos = new THREE.Vector3(0, 0.2, 3);
 let isDragging = false;
 let dragStart = null;
-let dragDeltaX = 0;
-let dragDeltaY = 0;
 let launchReady = false;
 let launchPower = 0;
 let launchHeight = 0;
 let canLaunch = false;
 let mixer = null;
 let cameraMovementSpeed = 10;
-let pigpath = "./models/pig.glb";
-let kingpigpath = "./models/Kingpig.glb";
-let helmetpigpath = "./models/Helmetpig.glb";
+let pigpath = "./models/characters/pig.glb";
+let kingpigpath = "./models/characters/Kingpig.glb";
+let helmetpigpath = "./models/characters/Helmetpig.glb";
 
 let gameStart = DEV_MODE;
 let playAnime = DEV_MODE;
@@ -52,9 +50,8 @@ let timer = 0;
 let gltfAnimations = [];
 
 let clouds = []; // 구름 모델들을 저장할 배열
-const cloud1Path = "./models/cloud1.glb";
-const cloud2Path = "./models/cloud2.glb";
-
+const cloud1Path = "./models/backgrounds/cloud1.glb";
+const cloud2Path = "./models/backgrounds/cloud2.glb";
 
 let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
 const GLASS_BREAK_THRESHOLD = 2.5;
@@ -210,307 +207,335 @@ function initStage(stageNumber) {
   ballBody.angularVelocity.setZero();
   ballBody.quaternion.set(0, 0, 0, 1);
   ballMesh.position.copy(initialBallPos);
-  if(stageNumber == 1){
-    loader.load("./models/Wall.glb", (gltf) => {
-    gltf.scene.traverse((child) => {
-      if (child.isMesh) {
-        const material = child.material;
-        const matName = material.name || "defaultMat";
-        const isGlass = matName.includes("Glass");
+  if (stageNumber == 1) {
+    loader.load("./models/buildings/Wall.glb", (gltf) => {
+      gltf.scene.traverse((child) => {
+        if (child.isMesh) {
+          const material = child.material;
+          const matName = material.name || "defaultMat";
+          const isGlass = matName.includes("Glass");
 
-        const mesh = child.clone();
-        mesh.geometry.computeBoundingBox();
-        mesh.castShadow = true;
-        scene.add(mesh);
+          const mesh = child.clone();
+          mesh.geometry.computeBoundingBox();
+          mesh.castShadow = true;
+          scene.add(mesh);
 
-        const worldBBox = new THREE.Box3().setFromObject(mesh);
-        const size = worldBBox.getSize(new THREE.Vector3());
-        const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
-        const shape = new CANNON.Box(halfExtents);
+          const worldBBox = new THREE.Box3().setFromObject(mesh);
+          const size = worldBBox.getSize(new THREE.Vector3());
+          const halfExtents = new CANNON.Vec3(
+            size.x / 2,
+            size.y / 2,
+            size.z / 2
+          );
+          const shape = new CANNON.Box(halfExtents);
 
-        let mass = 1;
-        if (matName.includes("Stone")) {
-          mass = 3;
-        } else if (matName.includes("Wood")) {
-          mass = 1;
-        } else if (matName.includes("Glass")) {
-          mass = 0.5;
+          let mass = 1;
+          if (matName.includes("Stone")) {
+            mass = 3;
+          } else if (matName.includes("Wood")) {
+            mass = 1;
+          } else if (matName.includes("Glass")) {
+            mass = 0.5;
+          }
+          const defaultMat = world.defaultMaterial;
+          const body = new CANNON.Body({ mass: mass, shape });
+          body.material = defaultMat;
+          body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
+          body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
+          world.addBody(body);
+
+          boxes.push({ mesh, body });
+          if (isGlass) {
+            body.addEventListener("collide", (event) => {
+              const impact =
+                event.contact.getImpactVelocityAlongNormal?.() || 0;
+              if (impact <= GLASS_BREAK_THRESHOLD) return;
+              setTimeout(() => {
+                scene.remove(mesh);
+                bodiesToRemove.push(body);
+
+                const originalMat = child.material;
+                const originalMap = originalMat.map;
+                const originalEnv = originalMat.envMap;
+
+                const bbox = new THREE.Box3().setFromObject(child);
+                const size = bbox.getSize(new THREE.Vector3());
+                const min = bbox.min;
+
+                for (let i = 0; i < DEBRIS_COUNT; i++) {
+                  const r = Math.random() * 0.02 + 0.01;
+                  const geom = new THREE.SphereGeometry(r, 6, 6);
+                  const mat = new THREE.MeshStandardMaterial({
+                    map: originalMap,
+                    envMap: originalEnv,
+                    transparent: true,
+                    opacity: 1,
+                    roughness: originalMat.roughness ?? 0.1,
+                    metalness: originalMat.metalness ?? 0,
+                  });
+                  const dm = new THREE.Mesh(geom, mat);
+
+                  dm.position.set(
+                    min.x + Math.random() * size.x,
+                    min.y + Math.random() * size.y,
+                    min.z + Math.random() * size.z
+                  );
+
+                  const vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * 2,
+                    Math.random() * 3 + 2,
+                    (Math.random() - 0.5) * 2
+                  );
+
+                  debrisList.push({
+                    mesh: dm,
+                    velocity: vel,
+                    age: 0,
+                  });
+                  scene.add(dm);
+                }
+              }, 500);
+            });
+          }
         }
-        const defaultMat = world.defaultMaterial;
-        const body = new CANNON.Body({ mass: mass, shape });
-        body.material = defaultMat;
-        body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
-        body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
-        world.addBody(body);
-
-        boxes.push({ mesh, body });
-        if (isGlass) {
-          body.addEventListener("collide", (event) => {
-            const impact = event.contact.getImpactVelocityAlongNormal?.() || 0;
-            if (impact <= GLASS_BREAK_THRESHOLD) return;
-            setTimeout(() => {
-              scene.remove(mesh);
-              bodiesToRemove.push(body);
-
-              const originalMat = child.material;
-              const originalMap = originalMat.map;
-              const originalEnv = originalMat.envMap;
-
-              const bbox = new THREE.Box3().setFromObject(child);
-              const size = bbox.getSize(new THREE.Vector3());
-              const min = bbox.min;
-
-              for (let i = 0; i < DEBRIS_COUNT; i++) {
-                const r = Math.random() * 0.02 + 0.01;
-                const geom = new THREE.SphereGeometry(r, 6, 6);
-                const mat = new THREE.MeshStandardMaterial({
-                  map: originalMap,
-                  envMap: originalEnv,
-                  transparent: true,
-                  opacity: 1,
-                  roughness: originalMat.roughness ?? 0.1,
-                  metalness: originalMat.metalness ?? 0,
-                });
-                const dm = new THREE.Mesh(geom, mat);
-
-                dm.position.set(
-                  min.x + Math.random() * size.x,
-                  min.y + Math.random() * size.y,
-                  min.z + Math.random() * size.z
-                );
-
-                const vel = new THREE.Vector3(
-                  (Math.random() - 0.5) * 2,
-                  Math.random() * 3 + 2,
-                  (Math.random() - 0.5) * 2
-                );
-
-                debrisList.push({
-                  mesh: dm,
-                  velocity: vel,
-                  age: 0,
-                });
-                scene.add(dm);
-              }
-            }, 500);
-          });
-        }
-      }
+      });
     });
-  })
-  }else if(stageNumber==2){
-    loader.load("./models/pot.glb", (gltf) => {
-    gltf.scene.traverse((child) => {
-      if (child.isMesh) {
-        const material = child.material;
-        const matName = material.name || "defaultMat";
-        const isGlass = matName.includes("Glass");
+  } else if (stageNumber == 2) {
+    loader.load("./models/buildings/pot.glb", (gltf) => {
+      gltf.scene.traverse((child) => {
+        if (child.isMesh) {
+          const material = child.material;
+          const matName = material.name || "defaultMat";
+          const isGlass = matName.includes("Glass");
 
-        const mesh = child.clone();
-        mesh.geometry.computeBoundingBox();
-        mesh.castShadow = true;
-        scene.add(mesh);
+          const mesh = child.clone();
+          mesh.geometry.computeBoundingBox();
+          mesh.castShadow = true;
+          scene.add(mesh);
 
-        const worldBBox = new THREE.Box3().setFromObject(mesh);
-        const size = worldBBox.getSize(new THREE.Vector3());
-        const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
-        const shape = new CANNON.Box(halfExtents);
+          const worldBBox = new THREE.Box3().setFromObject(mesh);
+          const size = worldBBox.getSize(new THREE.Vector3());
+          const halfExtents = new CANNON.Vec3(
+            size.x / 2,
+            size.y / 2,
+            size.z / 2
+          );
+          const shape = new CANNON.Box(halfExtents);
 
-        let mass = 1;
-        if (matName.includes("Stone")) {
-          mass = 3;
-        } else if (matName.includes("Wood")) {
-          mass = 1;
-        } else if (matName.includes("Glass")) {
-          mass = 0.5;
+          let mass = 1;
+          if (matName.includes("Stone")) {
+            mass = 3;
+          } else if (matName.includes("Wood")) {
+            mass = 1;
+          } else if (matName.includes("Glass")) {
+            mass = 0.5;
+          }
+          const defaultMat = world.defaultMaterial;
+          const body = new CANNON.Body({ mass: mass, shape });
+          body.material = defaultMat;
+          body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
+          body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
+          world.addBody(body);
+
+          boxes.push({ mesh, body });
+          if (isGlass) {
+            body.addEventListener("collide", (event) => {
+              const impact =
+                event.contact.getImpactVelocityAlongNormal?.() || 0;
+              if (impact <= GLASS_BREAK_THRESHOLD) return;
+              setTimeout(() => {
+                scene.remove(mesh);
+                bodiesToRemove.push(body);
+
+                const originalMat = child.material;
+                const originalMap = originalMat.map;
+                const originalEnv = originalMat.envMap;
+
+                const bbox = new THREE.Box3().setFromObject(child);
+                const size = bbox.getSize(new THREE.Vector3());
+                const min = bbox.min;
+
+                for (let i = 0; i < DEBRIS_COUNT; i++) {
+                  const r = Math.random() * 0.02 + 0.01;
+                  const geom = new THREE.SphereGeometry(r, 6, 6);
+                  const mat = new THREE.MeshStandardMaterial({
+                    map: originalMap,
+                    envMap: originalEnv,
+                    transparent: true,
+                    opacity: 1,
+                    roughness: originalMat.roughness ?? 0.1,
+                    metalness: originalMat.metalness ?? 0,
+                  });
+                  const dm = new THREE.Mesh(geom, mat);
+
+                  dm.position.set(
+                    min.x + Math.random() * size.x,
+                    min.y + Math.random() * size.y,
+                    min.z + Math.random() * size.z
+                  );
+
+                  const vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * 2,
+                    Math.random() * 3 + 2,
+                    (Math.random() - 0.5) * 2
+                  );
+
+                  debrisList.push({
+                    mesh: dm,
+                    velocity: vel,
+                    age: 0,
+                  });
+                  scene.add(dm);
+                }
+              }, 500);
+            });
+          }
         }
-        const defaultMat = world.defaultMaterial;
-        const body = new CANNON.Body({ mass: mass, shape });
-        body.material = defaultMat;
-        body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
-        body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
-        world.addBody(body);
-
-        boxes.push({ mesh, body });
-        if (isGlass) {
-          body.addEventListener("collide", (event) => {
-            const impact = event.contact.getImpactVelocityAlongNormal?.() || 0;
-            if (impact <= GLASS_BREAK_THRESHOLD) return;
-            setTimeout(() => {
-              scene.remove(mesh);
-              bodiesToRemove.push(body);
-
-              const originalMat = child.material;
-              const originalMap = originalMat.map;
-              const originalEnv = originalMat.envMap;
-
-              const bbox = new THREE.Box3().setFromObject(child);
-              const size = bbox.getSize(new THREE.Vector3());
-              const min = bbox.min;
-
-              for (let i = 0; i < DEBRIS_COUNT; i++) {
-                const r = Math.random() * 0.02 + 0.01;
-                const geom = new THREE.SphereGeometry(r, 6, 6);
-                const mat = new THREE.MeshStandardMaterial({
-                  map: originalMap,
-                  envMap: originalEnv,
-                  transparent: true,
-                  opacity: 1,
-                  roughness: originalMat.roughness ?? 0.1,
-                  metalness: originalMat.metalness ?? 0,
-                });
-                const dm = new THREE.Mesh(geom, mat);
-
-                dm.position.set(
-                  min.x + Math.random() * size.x,
-                  min.y + Math.random() * size.y,
-                  min.z + Math.random() * size.z
-                );
-
-                const vel = new THREE.Vector3(
-                  (Math.random() - 0.5) * 2,
-                  Math.random() * 3 + 2,
-                  (Math.random() - 0.5) * 2
-                );
-
-                debrisList.push({
-                  mesh: dm,
-                  velocity: vel,
-                  age: 0,
-                });
-                scene.add(dm);
-              }
-            }, 500);
-          });
-        }
-      }
+      });
     });
-  })
+  } else {
+    loader.load("./models/buildings/house.glb", (gltf) => {
+      gltf.scene.traverse((child) => {
+        if (child.isMesh) {
+          const material = child.material;
+          const matName = material.name || "defaultMat";
+          const isGlass = matName.includes("Glass");
+
+          const mesh = child.clone();
+          mesh.geometry.computeBoundingBox();
+          mesh.castShadow = true;
+          scene.add(mesh);
+
+          const worldBBox = new THREE.Box3().setFromObject(mesh);
+          const size = worldBBox.getSize(new THREE.Vector3());
+          const halfExtents = new CANNON.Vec3(
+            size.x / 2,
+            size.y / 2,
+            size.z / 2
+          );
+          const shape = new CANNON.Box(halfExtents);
+
+          let mass = 1;
+          if (matName.includes("Stone")) {
+            mass = 3;
+          } else if (matName.includes("Wood")) {
+            mass = 1;
+          } else if (matName.includes("Glass")) {
+            mass = 0.5;
+          }
+          const defaultMat = world.defaultMaterial;
+          const body = new CANNON.Body({ mass: mass, shape });
+          body.material = defaultMat;
+          body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
+          body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
+          world.addBody(body);
+
+          boxes.push({ mesh, body });
+          if (isGlass) {
+            body.addEventListener("collide", (event) => {
+              const impact =
+                event.contact.getImpactVelocityAlongNormal?.() || 0;
+              if (impact <= GLASS_BREAK_THRESHOLD) return;
+              setTimeout(() => {
+                scene.remove(mesh);
+                bodiesToRemove.push(body);
+
+                const originalMat = child.material;
+                const originalMap = originalMat.map;
+                const originalEnv = originalMat.envMap;
+
+                const bbox = new THREE.Box3().setFromObject(child);
+                const size = bbox.getSize(new THREE.Vector3());
+                const min = bbox.min;
+
+                for (let i = 0; i < DEBRIS_COUNT; i++) {
+                  const r = Math.random() * 0.02 + 0.01;
+                  const geom = new THREE.SphereGeometry(r, 6, 6);
+                  const mat = new THREE.MeshStandardMaterial({
+                    map: originalMap,
+                    envMap: originalEnv,
+                    transparent: true,
+                    opacity: 1,
+                    roughness: originalMat.roughness ?? 0.1,
+                    metalness: originalMat.metalness ?? 0,
+                  });
+                  const dm = new THREE.Mesh(geom, mat);
+
+                  dm.position.set(
+                    min.x + Math.random() * size.x,
+                    min.y + Math.random() * size.y,
+                    min.z + Math.random() * size.z
+                  );
+
+                  const vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * 2,
+                    Math.random() * 3 + 2,
+                    (Math.random() - 0.5) * 2
+                  );
+
+                  debrisList.push({
+                    mesh: dm,
+                    velocity: vel,
+                    age: 0,
+                  });
+                  scene.add(dm);
+                }
+              }, 500);
+            });
+          }
+        }
+      });
+    });
   }
-  else{
-  loader.load("./models/house.glb", (gltf) => {
-    gltf.scene.traverse((child) => {
-      if (child.isMesh) {
-        const material = child.material;
-        const matName = material.name || "defaultMat";
-        const isGlass = matName.includes("Glass");
-
-        const mesh = child.clone();
-        mesh.geometry.computeBoundingBox();
-        mesh.castShadow = true;
-        scene.add(mesh);
-
-        const worldBBox = new THREE.Box3().setFromObject(mesh);
-        const size = worldBBox.getSize(new THREE.Vector3());
-        const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
-        const shape = new CANNON.Box(halfExtents);
-
-        let mass = 1;
-        if (matName.includes("Stone")) {
-          mass = 3;
-        } else if (matName.includes("Wood")) {
-          mass = 1;
-        } else if (matName.includes("Glass")) {
-          mass = 0.5;
-        }
-        const defaultMat = world.defaultMaterial;
-        const body = new CANNON.Body({ mass: mass, shape });
-        body.material = defaultMat;
-        body.position.copy(mesh.getWorldPosition(new THREE.Vector3()));
-        body.quaternion.copy(mesh.getWorldQuaternion(new THREE.Quaternion()));
-        world.addBody(body);
-
-        boxes.push({ mesh, body });
-        if (isGlass) {
-          body.addEventListener("collide", (event) => {
-            const impact = event.contact.getImpactVelocityAlongNormal?.() || 0;
-            if (impact <= GLASS_BREAK_THRESHOLD) return;
-            setTimeout(() => {
-              scene.remove(mesh);
-              bodiesToRemove.push(body);
-
-              const originalMat = child.material;
-              const originalMap = originalMat.map;
-              const originalEnv = originalMat.envMap;
-
-              const bbox = new THREE.Box3().setFromObject(child);
-              const size = bbox.getSize(new THREE.Vector3());
-              const min = bbox.min;
-
-              for (let i = 0; i < DEBRIS_COUNT; i++) {
-                const r = Math.random() * 0.02 + 0.01;
-                const geom = new THREE.SphereGeometry(r, 6, 6);
-                const mat = new THREE.MeshStandardMaterial({
-                  map: originalMap,
-                  envMap: originalEnv,
-                  transparent: true,
-                  opacity: 1,
-                  roughness: originalMat.roughness ?? 0.1,
-                  metalness: originalMat.metalness ?? 0,
-                });
-                const dm = new THREE.Mesh(geom, mat);
-
-                dm.position.set(
-                  min.x + Math.random() * size.x,
-                  min.y + Math.random() * size.y,
-                  min.z + Math.random() * size.z
-                );
-
-                const vel = new THREE.Vector3(
-                  (Math.random() - 0.5) * 2,
-                  Math.random() * 3 + 2,
-                  (Math.random() - 0.5) * 2
-                );
-
-                debrisList.push({
-                  mesh: dm,
-                  velocity: vel,
-                  age: 0,
-                });
-                scene.add(dm);
-              }
-            }, 500);
-          });
-        }
-      }
-    });
-  })};
 
   // 구름 모델 로드 및 무작위 배치
   const numClouds = 200; // 배치할 구름의 총 개수
   const cloudSpawnArea = {
-      minX: -200, maxX: 200, // 구름이 배치될 넓은 X 범위
-      minY: 20, maxY: 40,   // 구름이 배치될 Y 높이 범위 (하늘)
-      minZ: -200, maxZ: 200   // 구름이 배치될 넓은 Z 범위
+    minX: -200,
+    maxX: 200, // 구름이 배치될 넓은 X 범위
+    minY: 20,
+    maxY: 40, // 구름이 배치될 Y 높이 범위 (하늘)
+    minZ: -200,
+    maxZ: 200, // 구름이 배치될 넓은 Z 범위
   };
 
-  const loadAndPlaceClouds = (path, count, arrayToStore, minScale, maxScale) => {
-      loader.load(path, (gltf) => {
-          for (let i = 0; i < count; i++) {
-              const model = gltf.scene.clone();
+  const loadAndPlaceClouds = (
+    path,
+    count,
+    arrayToStore,
+    minScale,
+    maxScale
+  ) => {
+    loader.load(path, (gltf) => {
+      for (let i = 0; i < count; i++) {
+        const model = gltf.scene.clone();
 
-              const x = Math.random() * (cloudSpawnArea.maxX - cloudSpawnArea.minX) + cloudSpawnArea.minX;
-              const y = Math.random() * (cloudSpawnArea.maxY - cloudSpawnArea.minY) + cloudSpawnArea.minY;
-              const z = Math.random() * (cloudSpawnArea.maxZ - cloudSpawnArea.minZ) + cloudSpawnArea.minZ;
+        const x =
+          Math.random() * (cloudSpawnArea.maxX - cloudSpawnArea.minX) +
+          cloudSpawnArea.minX;
+        const y =
+          Math.random() * (cloudSpawnArea.maxY - cloudSpawnArea.minY) +
+          cloudSpawnArea.minY;
+        const z =
+          Math.random() * (cloudSpawnArea.maxZ - cloudSpawnArea.minZ) +
+          cloudSpawnArea.minZ;
 
-              model.position.set(x, y, z);
+        model.position.set(x, y, z);
 
-              const scale = minScale + Math.random() * (maxScale - minScale);
-              model.scale.set(scale, scale, scale);
-              model.rotation.y = Math.random() * Math.PI * 2; // 무작위 Y축 회전
+        const scale = minScale + Math.random() * (maxScale - minScale);
+        model.scale.set(scale, scale, scale);
+        model.rotation.y = Math.random() * Math.PI * 2; // 무작위 Y축 회전
 
-              scene.add(model);
-              arrayToStore.push(model);
-          }
-      });
+        scene.add(model);
+        arrayToStore.push(model);
+      }
+    });
   };
 
   // cloud1.glb 와 cloud2.glb 를 각각 10개씩 배치 (총 20개)
   // minScale과 maxScale을 조절하여 구름의 크기 범위를 설정합니다.
   loadAndPlaceClouds(cloud1Path, numClouds / 10, clouds, 2.5, 3.5); // 첫 번째 구름 모델
   loadAndPlaceClouds(cloud2Path, numClouds, clouds, 2.5, 4); // 두 번째 구름 모델
-
-
 
   spawnCharacter(pigpath, new THREE.Vector3(0, 0.2, 0));
   spawnCharacter(helmetpigpath, new THREE.Vector3(1, 0.2, 0));
@@ -607,15 +632,18 @@ const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 
 // === 바닥 ===
 const textureLoader = new THREE.TextureLoader();
-// const grassTexture = textureLoader.load("./models/onetonegrass.png");
-const grassDiffuseMap = textureLoader.load("./models/grassDiffuse.jpg");
-const grassBumpMap = textureLoader.load("./models/grassBump.jpg");
-const grassNormalMap = textureLoader.load("./models/grassNormal.jpg");
+const grassDiffuseMap = textureLoader.load(
+  "./models/backgrounds/grassDiffuse.jpg"
+);
+const grassBumpMap = textureLoader.load("./models/backgrounds/grassBump.jpg");
+const grassNormalMap = textureLoader.load(
+  "./models/backgrounds/grassNormal.jpg"
+);
 
 // 텍스처 반복 설정
 grassDiffuseMap.wrapS = THREE.RepeatWrapping;
 grassDiffuseMap.wrapT = THREE.RepeatWrapping;
-grassDiffuseMap.repeat.set(50, 50); // 바닥 크기에 맞춰 반복 횟수 조절
+grassDiffuseMap.repeat.set(50, 50);
 
 grassBumpMap.wrapS = THREE.RepeatWrapping;
 grassBumpMap.wrapT = THREE.RepeatWrapping;
@@ -625,24 +653,14 @@ grassNormalMap.wrapS = THREE.RepeatWrapping;
 grassNormalMap.wrapT = THREE.RepeatWrapping;
 grassNormalMap.repeat.set(50, 50);
 
-
-// grassTexture.wrapT = THREE.RepeatWrapping;
-// grassTexture.wrapS = THREE.RepeatWrapping;
-// grassTexture.repeat.set(50, 50);
-const floorGeo = new THREE.BoxGeometry(100, 0.1, 100);
-// const floorMat = new THREE.MeshStandardMaterial({
-//   color: 0x888888,
-//   transparent: true,
-//   opacity: 0.5,
-// });
+const floorGeo = new THREE.BoxGeometry(400, 0.1, 400);
 
 const floorMat = new THREE.MeshStandardMaterial({
   map: grassDiffuseMap,
   bumpMap: grassBumpMap,
-  bumpScale: 0.5, // 범프 맵의 강도 조절 (필요에 따라 조정)
+  bumpScale: 0.5,
   normalMap: grassNormalMap,
-  normalScale: new THREE.Vector2(1, 1), // 노멀 맵의 강도 조절 (필요에 따라 조정)
-
+  normalScale: new THREE.Vector2(1, 1),
 });
 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 floorMesh.position.set(0, -0.05, 0);
@@ -675,9 +693,9 @@ animScene.add(animAmbient);
 
 // === 구조물: Blender Animation GLB 모델 로딩
 const loaderAnim = new GLTFLoader();
-loader.load("./models/WallAnime.glb", (gltf) => {
+loader.load("./models/buildings/animations/WallAnime.glb", (gltf) => {
   // 애니메이션 관련
-  loaderAnim.load("./models/WallAnime.glb", (gltf) => {
+  loaderAnim.load("./models/buildings/animations/WallAnime.glb", (gltf) => {
     console.log("GLTF loaded:", gltf);
     const model = gltf.scene;
     animScene.add(model);
@@ -693,19 +711,16 @@ loader.load("./models/WallAnime.glb", (gltf) => {
 
 let birdMesh;
 // === Bird 모델 로드 ===
-loader.load('./models/Bird.glb', (gltf) => {
-    birdMesh = gltf.scene;
-    birdMesh.scale.set(0.15, 0.15, 0.15); // 새 모델의 크기 조절
-    scene.add(birdMesh);
+loader.load("./models/characters/Bird.glb", (gltf) => {
+  birdMesh = gltf.scene;
+  birdMesh.scale.set(0.15, 0.15, 0.15); // 새 모델의 크기 조절
+  scene.add(birdMesh);
 
-    birdMesh.position.set(0, -0.2, 0);
-    birdMesh.rotation.y = -Math.PI;
+  birdMesh.position.set(0, -0.2, 0);
+  birdMesh.rotation.y = -Math.PI;
 
-    ballMesh.add(birdMesh); // ballMesh의 자식으로 birdMesh 추가
-
+  ballMesh.add(birdMesh); // ballMesh의 자식으로 birdMesh 추가
 });
-
-
 
 // === 공 ===
 const ballGeo = new THREE.SphereGeometry(0.2);
@@ -1037,8 +1052,8 @@ function animate() {
   }
   if (!gameStart) {
     // 애니메이션 파트
-    camera.position.set(10, 15, 5);
-    camera.lookAt(0, 0, -5);
+    camera.position.set(15, 13, 5);
+    camera.lookAt(0, 5, -5);
     const delta = clock.getDelta();
     if (mixer) mixer.update(delta);
     renderer.render(animScene, camera);
@@ -1082,7 +1097,6 @@ function animate() {
       mesh.quaternion.copy(body.quaternion);
     });
 
-
     // ── 포인터락 모드: WASD/Space/Shift로 이동 ──
     if (isPointerMode) {
       if (keys.KeyW) pointerControls.moveForward(cameraMovementSpeed * dt);
@@ -1094,7 +1108,19 @@ function animate() {
       if (camera.position.y < 2) {
         camera.position.y = 2;
       }
-      // 새 안으로 못들어가게 막기?
+      if (
+        camera.position.x > 50 ||
+        camera.position.x < -50 ||
+        camera.position.z > 50 ||
+        camera.position.z < -50 ||
+        camera.position.y > 30
+      ) {
+        camera.position.set(
+          Math.max(-50, Math.min(50, camera.position.x)),
+          Math.min(30, camera.position.y),
+          Math.max(-50, Math.min(50, camera.position.z))
+        );
+      }
     }
     // ── 드래그/발사 모드: 원래 카메라 로직 ──
     else {
