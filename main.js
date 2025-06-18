@@ -3,7 +3,7 @@ import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
-const DEV_MODE = true;
+const DEV_MODE = false;
 let selectedStage = null;
 let showLogo = false;
 
@@ -16,6 +16,14 @@ const elThrowCount = document.getElementById("throw-count");
 const elBestScorePanel = document.getElementById("best-score-panel");
 const elCharacterCount = document.getElementById("char-count");
 const controlPanel = document.getElementById("control-panel");
+const logoPanel = document.getElementById("logo-panel");
+const modePanel = document.getElementById("mode-panel");
+const btnModeF = document.getElementById("btn-mode-f");
+const btnModeC = document.getElementById("btn-mode-c");
+const modeLabel = document.getElementById("mode-label");
+const btnModeHelp = document.getElementById("btn-mode-help");
+const modalOverlay = document.getElementById("mode-modal");
+const btnModalClose = document.getElementById("btn-modal-close");
 
 let throwCount = 0;
 let scoreCount = 0;
@@ -63,6 +71,39 @@ document.querySelectorAll("#stage-buttons button").forEach((btn) => {
 
     elCurrentStage.textContent = selectedStage;
   });
+});
+
+function updateModeUI() {
+  btnModeF.classList.toggle("active", isPointerMode);
+  btnModeC.classList.toggle("active", !isPointerMode);
+  modeLabel.textContent = isPointerMode
+    ? "FPS"
+    : cameraMode === "side"
+    ? "Throw"
+    : "Angle";
+}
+
+btnModeHelp.addEventListener("click", () => {
+  modalOverlay.style.display = "flex";
+});
+btnModalClose.addEventListener("click", () => {
+  modalOverlay.style.display = "none";
+});
+modalOverlay.addEventListener("click", (e) => {
+  if (e.target === modalOverlay) modalOverlay.style.display = "none";
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Escape") {
+    // 모달이 켜져 있으면 끄기
+    if (modalOverlay.style.display === "flex") {
+      modalOverlay.style.display = "none";
+    }
+    // 포인터락 모드라면 해제
+    if (isPointerMode) {
+      pointerControls.unlock();
+    }
+  }
 });
 
 stageBtns.forEach((btn) => {
@@ -799,8 +840,13 @@ pointerControls.addEventListener("unlock", () => {
 // F 키로 토글
 window.addEventListener("keydown", (e) => {
   if (e.code === "KeyF") {
-    if (isPointerMode) pointerControls.unlock();
-    else pointerControls.lock();
+    if (isPointerMode) {
+      pointerControls.unlock();
+      updateModeUI();
+    } else {
+      pointerControls.lock();
+      updateModeUI();
+    }
     return;
   }
 
@@ -902,6 +948,8 @@ function animate() {
 
   if (selectedStage == null) {
     controlPanel.style.display = "none";
+    logoPanel.style.display = "none";
+    modePanel.style.display = "none";
     return;
   }
   if (!gameStart) {
@@ -921,7 +969,7 @@ function animate() {
     if (showLogo) {
       logoOverlay.style.display = "flex";
       timer += clock.getDelta();
-      if (timer >= 1) {
+      if (timer >= 2) {
         showLogo = false;
         logoOverlay.style.display = "none";
         gameStart = true;
@@ -1021,6 +1069,10 @@ function animate() {
       }
     }
     controlPanel.style.display = "block";
+    logoPanel.style.display = "block";
+    modePanel.style.display = "flex";
+    updateModeUI();
+
     renderer.render(scene, camera);
   }
 }
