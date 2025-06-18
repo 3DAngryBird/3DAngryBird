@@ -140,6 +140,9 @@ stageBtns.forEach((btn) => {
     camera.lookAt(initialFrontTarget);
     animTimer = 0;
     playAnime = !DEV_MODE;
+    controlPanel.style.display = "none";
+    logoPanel.style.display = "none";
+    modePanel.style.display = "none";
     showLogo = false;
     timer = 0;
     gameStart = !playAnime;
@@ -240,8 +243,10 @@ function initStage(stageNumber) {
     fp = new String("./models/buildings/Pot.glb");
   } else if (stageNumber == 3) {
     fp = new String("./models/buildings/GlassTower.glb");
-  } else {
+  } else if(stageNumber==4){
     fp = new String("./models/buildings/House.glb");
+  }else{
+    fp = new String("./models/buildings/Domino.glb");
   }
   loader.load(fp, (gltf) => {
     gltf.scene.traverse((child) => {
@@ -968,7 +973,7 @@ function animate() {
       logoOverlay.style.display = "none";
       showLogo = false;
       gameStart = true;
-      logoTimer = 0; // 반드시 초 기화
+      logoTimer = 0;
     } else {
       renderer.render(scene, camera);
     }
