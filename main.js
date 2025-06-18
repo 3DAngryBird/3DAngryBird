@@ -370,8 +370,9 @@ function initStage(stageNumber) {
   loadAndPlaceClouds(cloud1Path, numClouds / 10, clouds, 2.5, 3.5); // 첫 번째 구름 모델
   loadAndPlaceClouds(cloud2Path, numClouds, clouds, 2.5, 4); // 두 번째 구름 모델
 
-  spawnCharacter(pigpath, new THREE.Vector3(0, 0.2, 0));
-  spawnCharacter(helmetpigpath, new THREE.Vector3(1, 0.2, 0));
+  spawnCharacter(pigpath, new THREE.Vector3(0, 0, 0), 2);
+  spawnCharacter(helmetpigpath, new THREE.Vector3(2, 0, 0), 2);
+  spawnCharacter(kingpigpath, new THREE.Vector3(4, 0, 0), 2);
 }
 
 function getBestScore(stage) {
@@ -609,10 +610,10 @@ function updateCharCount() {
   }
 }
 
-function spawnCharacter(name, position) {
+function spawnCharacter(name, position, scale) {
   let hasDied = false;
   // 모델 파일 경로 결정
-  let sizeconstant = 1.0;
+  let sizeconstant = scale;
   let size = 0.0;
   if (name == pigpath) {
     size = 0.2 * sizeconstant;
@@ -633,7 +634,7 @@ function spawnCharacter(name, position) {
   const body = new CANNON.Body({
     mass: 1,
     shape: new CANNON.Sphere(size),
-    position: new CANNON.Vec3(position.x, position.y, position.z),
+    position: new CANNON.Vec3(position.x, position.y + size, position.z),
     material: charMaterial,
   });
   body.linearDamping = 0.4;
@@ -676,7 +677,11 @@ function spawnCharacter(name, position) {
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
-      pigRoot.scale.set(0.1, 0.1, 0.1);
+      pigRoot.scale.set(
+        0.1 * sizeconstant,
+        0.1 * sizeconstant,
+        0.1 * sizeconstant
+      );
 
       // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
       pigRoot.traverse((child) => {
@@ -696,7 +701,11 @@ function spawnCharacter(name, position) {
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
-      pigRoot.scale.set(0.1, 0.1, 0.1);
+      pigRoot.scale.set(
+        0.1 * sizeconstant,
+        0.1 * sizeconstant,
+        0.1 * sizeconstant
+      );
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
@@ -716,7 +725,11 @@ function spawnCharacter(name, position) {
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-10 * size) / 11.0, 0);
-      pigRoot.scale.set(0.1, 0.1, 0.1);
+      pigRoot.scale.set(
+        0.1 * sizeconstant,
+        0.1 * sizeconstant,
+        0.1 * sizeconstant
+      );
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
@@ -910,12 +923,13 @@ function animate() {
     renderer.render(animScene, camera);
 
     if (animTimer >= 8) {
-      logoTimer = 0;
+      // 정확히 8초 동안만
+      logoTimer = 0; // 로고 타이머도 초기화
       playAnime = false;
       showLogo = true;
-      animTimer = 0;
+      animTimer = 0; // 반드시 초기화
     }
-    return;
+    return; // 애니메이션 구간 동안만 이 블록 실행
   } else if (gameStart) {
     const dt = clock.getDelta();
     world.step(1 / 60, dt);
