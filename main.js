@@ -3,7 +3,7 @@ import * as CANNON from "cannon-es";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 
-const DEV_MODE = true;
+const DEV_MODE = false;
 let selectedStage = null;
 let showLogo = false;
 
@@ -16,6 +16,14 @@ const elThrowCount = document.getElementById("throw-count");
 const elBestScorePanel = document.getElementById("best-score-panel");
 const elCharacterCount = document.getElementById("char-count");
 const controlPanel = document.getElementById("control-panel");
+const logoPanel = document.getElementById("logo-panel");
+const modePanel = document.getElementById("mode-panel");
+const btnModeF = document.getElementById("btn-mode-f");
+const btnModeC = document.getElementById("btn-mode-c");
+const modeLabel = document.getElementById("mode-label");
+const btnModeHelp = document.getElementById("btn-mode-help");
+const modalOverlay = document.getElementById("mode-modal");
+const btnModalClose = document.getElementById("btn-modal-close");
 
 let throwCount = 0;
 let scoreCount = 0;
@@ -26,17 +34,15 @@ const initialFrontTarget = new THREE.Vector3(0, 1, 0);
 const initialBallPos = new THREE.Vector3(0, 0.2, 3);
 let isDragging = false;
 let dragStart = null;
-let dragDeltaX = 0;
-let dragDeltaY = 0;
 let launchReady = false;
 let launchPower = 0;
 let launchHeight = 0;
 let canLaunch = false;
 let mixer = null;
 let cameraMovementSpeed = 10;
-let pigpath = "./models/pig.glb";
-let kingpigpath = "./models/Kingpig.glb";
-let helmetpigpath = "./models/Helmetpig.glb";
+let pigpath = "./models/characters/pig.glb";
+let kingpigpath = "./models/characters/Kingpig.glb";
+let helmetpigpath = "./models/characters/Helmetpig.glb";
 
 let gameStart = DEV_MODE;
 let playAnime = DEV_MODE;
@@ -44,12 +50,11 @@ let timer = 0;
 let gltfAnimations = [];
 
 let clouds = []; // 구름 모델들을 저장할 배열
-const cloud1Path = "./models/cloud1.glb";
-const cloud2Path = "./models/cloud2.glb";
-
+const cloud1Path = "./models/backgrounds/cloud1.glb";
+const cloud2Path = "./models/backgrounds/cloud2.glb";
 
 let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
-const GLASS_BREAK_THRESHOLD = 2.5;
+const GLASS_BREAK_THRESHOLD = 3.5;
 const debrisList = [];
 const DEBRIS_COUNT = 30; // 잔해 개수
 const DEBRIS_LIFETIME = 1.5; // 초 단위
@@ -68,6 +73,39 @@ document.querySelectorAll("#stage-buttons button").forEach((btn) => {
 
     elCurrentStage.textContent = selectedStage;
   });
+});
+
+function updateModeUI() {
+  btnModeF.classList.toggle("active", isPointerMode);
+  btnModeC.classList.toggle("active", !isPointerMode);
+  modeLabel.textContent = isPointerMode
+    ? "FPS"
+    : cameraMode === "side"
+    ? "Throw"
+    : "Angle";
+}
+
+btnModeHelp.addEventListener("click", () => {
+  modalOverlay.style.display = "flex";
+});
+btnModalClose.addEventListener("click", () => {
+  modalOverlay.style.display = "none";
+});
+modalOverlay.addEventListener("click", (e) => {
+  if (e.target === modalOverlay) modalOverlay.style.display = "none";
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Escape") {
+    // 모달이 켜져 있으면 끄기
+    if (modalOverlay.style.display === "flex") {
+      modalOverlay.style.display = "none";
+    }
+    // 포인터락 모드라면 해제
+    if (isPointerMode) {
+      pointerControls.unlock();
+    }
+  }
 });
 
 stageBtns.forEach((btn) => {
@@ -164,19 +202,24 @@ function initStage(stageNumber) {
   });
   debrisList.length = 0;
 
-  // 기존 구름 제거
-  clouds.forEach(mesh => {
-      scene.remove(mesh);
-  });
-  clouds.length = 0; 
-
   ballBody.position.copy(initialBallPos);
   ballBody.velocity.setZero();
   ballBody.angularVelocity.setZero();
   ballBody.quaternion.set(0, 0, 0, 1);
   ballMesh.position.copy(initialBallPos);
 
-  loader.load("./models/house.glb", (gltf) => {
+  var fp;
+  if (stageNumber == 1) {
+    fp = new String("./models/buildings/Wall.glb");
+  } else if (stageNumber == 2) {
+    fp = new String("./models/buildings/Pot.glb");
+  } else if (stageNumber == 3) {
+    fp = new String("./models/buildings/GlassTower.glb");
+  } else {
+    fp = new String("./models/buildings/House.glb");
+  }
+
+  loader.load(fp, (gltf) => {
     gltf.scene.traverse((child) => {
       if (child.isMesh) {
         const material = child.material;
@@ -267,30 +310,45 @@ function initStage(stageNumber) {
   // 구름 모델 로드 및 무작위 배치
   const numClouds = 200; // 배치할 구름의 총 개수
   const cloudSpawnArea = {
-      minX: -200, maxX: 200, // 구름이 배치될 넓은 X 범위
-      minY: 20, maxY: 40,   // 구름이 배치될 Y 높이 범위 (하늘)
-      minZ: -200, maxZ: 200   // 구름이 배치될 넓은 Z 범위
+    minX: -200,
+    maxX: 200, // 구름이 배치될 넓은 X 범위
+    minY: 20,
+    maxY: 40, // 구름이 배치될 Y 높이 범위 (하늘)
+    minZ: -200,
+    maxZ: 200, // 구름이 배치될 넓은 Z 범위
   };
 
-  const loadAndPlaceClouds = (path, count, arrayToStore, minScale, maxScale) => {
-      loader.load(path, (gltf) => {
-          for (let i = 0; i < count; i++) {
-              const model = gltf.scene.clone();
+  const loadAndPlaceClouds = (
+    path,
+    count,
+    arrayToStore,
+    minScale,
+    maxScale
+  ) => {
+    loader.load(path, (gltf) => {
+      for (let i = 0; i < count; i++) {
+        const model = gltf.scene.clone();
 
-              const x = Math.random() * (cloudSpawnArea.maxX - cloudSpawnArea.minX) + cloudSpawnArea.minX;
-              const y = Math.random() * (cloudSpawnArea.maxY - cloudSpawnArea.minY) + cloudSpawnArea.minY;
-              const z = Math.random() * (cloudSpawnArea.maxZ - cloudSpawnArea.minZ) + cloudSpawnArea.minZ;
+        const x =
+          Math.random() * (cloudSpawnArea.maxX - cloudSpawnArea.minX) +
+          cloudSpawnArea.minX;
+        const y =
+          Math.random() * (cloudSpawnArea.maxY - cloudSpawnArea.minY) +
+          cloudSpawnArea.minY;
+        const z =
+          Math.random() * (cloudSpawnArea.maxZ - cloudSpawnArea.minZ) +
+          cloudSpawnArea.minZ;
 
-              model.position.set(x, y, z);
+        model.position.set(x, y, z);
 
-              const scale = minScale + Math.random() * (maxScale - minScale);
-              model.scale.set(scale, scale, scale);
-              model.rotation.y = Math.random() * Math.PI * 2; // 무작위 Y축 회전
+        const scale = minScale + Math.random() * (maxScale - minScale);
+        model.scale.set(scale, scale, scale);
+        model.rotation.y = Math.random() * Math.PI * 2; // 무작위 Y축 회전
 
-              scene.add(model);
-              arrayToStore.push(model);
-          }
-      });
+        scene.add(model);
+        arrayToStore.push(model);
+      }
+    });
   };
 
   // cloud1.glb 와 cloud2.glb 를 각각 10개씩 배치 (총 20개)
@@ -298,10 +356,9 @@ function initStage(stageNumber) {
   loadAndPlaceClouds(cloud1Path, numClouds / 10, clouds, 2.5, 3.5); // 첫 번째 구름 모델
   loadAndPlaceClouds(cloud2Path, numClouds, clouds, 2.5, 4); // 두 번째 구름 모델
 
-
-
-  spawnCharacter(pigpath, new THREE.Vector3(0, 0.2, 0));
-  spawnCharacter(helmetpigpath, new THREE.Vector3(1, 0.2, 0));
+  spawnCharacter(pigpath, new THREE.Vector3(0, 0, 0), 2);
+  spawnCharacter(helmetpigpath, new THREE.Vector3(1, 0, 0), 2);
+  spawnCharacter(kingpigpath, new THREE.Vector3(2, 0, 0), 2);
 }
 
 function getBestScore(stage) {
@@ -395,15 +452,18 @@ const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 
 // === 바닥 ===
 const textureLoader = new THREE.TextureLoader();
-// const grassTexture = textureLoader.load("./models/onetonegrass.png");
-const grassDiffuseMap = textureLoader.load("./models/grassDiffuse.jpg");
-const grassBumpMap = textureLoader.load("./models/grassBump.jpg");
-const grassNormalMap = textureLoader.load("./models/grassNormal.jpg");
+const grassDiffuseMap = textureLoader.load(
+  "./models/backgrounds/grassDiffuse.jpg"
+);
+const grassBumpMap = textureLoader.load("./models/backgrounds/grassBump.jpg");
+const grassNormalMap = textureLoader.load(
+  "./models/backgrounds/grassNormal.jpg"
+);
 
 // 텍스처 반복 설정
 grassDiffuseMap.wrapS = THREE.RepeatWrapping;
 grassDiffuseMap.wrapT = THREE.RepeatWrapping;
-grassDiffuseMap.repeat.set(50, 50); // 바닥 크기에 맞춰 반복 횟수 조절
+grassDiffuseMap.repeat.set(50, 50);
 
 grassBumpMap.wrapS = THREE.RepeatWrapping;
 grassBumpMap.wrapT = THREE.RepeatWrapping;
@@ -413,24 +473,14 @@ grassNormalMap.wrapS = THREE.RepeatWrapping;
 grassNormalMap.wrapT = THREE.RepeatWrapping;
 grassNormalMap.repeat.set(50, 50);
 
-
-// grassTexture.wrapT = THREE.RepeatWrapping;
-// grassTexture.wrapS = THREE.RepeatWrapping;
-// grassTexture.repeat.set(50, 50);
-const floorGeo = new THREE.BoxGeometry(100, 0.1, 100);
-// const floorMat = new THREE.MeshStandardMaterial({
-//   color: 0x888888,
-//   transparent: true,
-//   opacity: 0.5,
-// });
+const floorGeo = new THREE.BoxGeometry(400, 0.1, 400);
 
 const floorMat = new THREE.MeshStandardMaterial({
   map: grassDiffuseMap,
   bumpMap: grassBumpMap,
-  bumpScale: 0.5, // 범프 맵의 강도 조절 (필요에 따라 조정)
+  bumpScale: 0.5,
   normalMap: grassNormalMap,
-  normalScale: new THREE.Vector2(1, 1), // 노멀 맵의 강도 조절 (필요에 따라 조정)
-
+  normalScale: new THREE.Vector2(1, 1),
 });
 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 floorMesh.position.set(0, -0.05, 0);
@@ -463,9 +513,9 @@ animScene.add(animAmbient);
 
 // === 구조물: Blender Animation GLB 모델 로딩
 const loaderAnim = new GLTFLoader();
-loader.load("./models/WallAnime.glb", (gltf) => {
+loader.load("./models/buildings/animations/WallAnime.glb", (gltf) => {
   // 애니메이션 관련
-  loaderAnim.load("./models/WallAnime.glb", (gltf) => {
+  loaderAnim.load("./models/buildings/animations/WallAnime.glb", (gltf) => {
     console.log("GLTF loaded:", gltf);
     const model = gltf.scene;
     animScene.add(model);
@@ -481,19 +531,16 @@ loader.load("./models/WallAnime.glb", (gltf) => {
 
 let birdMesh;
 // === Bird 모델 로드 ===
-loader.load('./models/Bird.glb', (gltf) => {
-    birdMesh = gltf.scene;
-    birdMesh.scale.set(0.15, 0.15, 0.15); // 새 모델의 크기 조절
-    scene.add(birdMesh);
+loader.load("./models/characters/Bird.glb", (gltf) => {
+  birdMesh = gltf.scene;
+  birdMesh.scale.set(0.15, 0.15, 0.15); // 새 모델의 크기 조절
+  scene.add(birdMesh);
 
-    birdMesh.position.set(0, -0.2, 0);
-    birdMesh.rotation.y = -Math.PI;
+  birdMesh.position.set(0, -0.2, 0);
+  birdMesh.rotation.y = -Math.PI;
 
-    ballMesh.add(birdMesh); // ballMesh의 자식으로 birdMesh 추가
-
+  ballMesh.add(birdMesh); // ballMesh의 자식으로 birdMesh 추가
 });
-
-
 
 // === 공 ===
 const ballGeo = new THREE.SphereGeometry(0.2);
@@ -538,7 +585,7 @@ const charFloorContact = new CANNON.ContactMaterial(
 );
 world.addContactMaterial(charFloorContact);
 world.addContactMaterial(charDefaultContact);
-world.solver.iterations = 100;
+world.solver.iterations = 200;
 world.solver.tolerance = 0;
 
 function updateCharCount() {
@@ -549,10 +596,10 @@ function updateCharCount() {
   }
 }
 
-function spawnCharacter(name, position) {
+function spawnCharacter(name, position, scale) {
   let hasDied = false;
   // 모델 파일 경로 결정
-  let sizeconstant = 1.0;
+  let sizeconstant = scale;
   let size = 0.0;
   if (name == pigpath) {
     size = 0.2 * sizeconstant;
@@ -573,7 +620,7 @@ function spawnCharacter(name, position) {
   const body = new CANNON.Body({
     mass: 1,
     shape: new CANNON.Sphere(size),
-    position: new CANNON.Vec3(position.x, position.y, position.z),
+    position: new CANNON.Vec3(position.x, position.y + size, position.z),
     material: charMaterial,
   });
   body.linearDamping = 0.4;
@@ -616,7 +663,7 @@ function spawnCharacter(name, position) {
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
-      pigRoot.scale.set(0.1, 0.1, 0.1);
+      pigRoot.scale.set(0.1 * sizeconstant, 0.1 * sizeconstant, 0.1 * sizeconstant);
 
       // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
       pigRoot.traverse((child) => {
@@ -636,7 +683,7 @@ function spawnCharacter(name, position) {
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
-      pigRoot.scale.set(0.1, 0.1, 0.1);
+      pigRoot.scale.set(0.1 * sizeconstant, 0.1 * sizeconstant, 0.1 * sizeconstant);
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
@@ -656,7 +703,7 @@ function spawnCharacter(name, position) {
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-10 * size) / 11.0, 0);
-      pigRoot.scale.set(0.1, 0.1, 0.1);
+      pigRoot.scale.set(0.1 * sizeconstant, 0.1 * sizeconstant, 0.1 * sizeconstant);
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
@@ -711,8 +758,13 @@ pointerControls.addEventListener("unlock", () => {
 // F 키로 토글
 window.addEventListener("keydown", (e) => {
   if (e.code === "KeyF") {
-    if (isPointerMode) pointerControls.unlock();
-    else pointerControls.lock();
+    if (isPointerMode) {
+      pointerControls.unlock();
+      updateModeUI();
+    } else {
+      pointerControls.lock();
+      updateModeUI();
+    }
     return;
   }
 
@@ -809,39 +861,50 @@ window.addEventListener("mouseup", (e) => {
 // =======================================
 //  animate 함수: 물리 업데이트 + 카메라/렌더링
 // =======================================
+
+let animTimer = 0;
+let logoTimer = 0;
 function animate() {
   requestAnimationFrame(animate);
 
   if (selectedStage == null) {
     controlPanel.style.display = "none";
+    logoPanel.style.display = "none";
+    modePanel.style.display = "none";
     return;
   }
-  if (!gameStart) {
-    // 애니메이션 파트
-    camera.position.set(10, 15, 5);
-    camera.lookAt(0, 0, -5);
+  if (showLogo) {
     const delta = clock.getDelta();
-    if (mixer) mixer.update(delta);
+    logoOverlay.style.display = "flex";
+    logoTimer += delta;
+    if (logoTimer >= 3) {
+      logoOverlay.style.display = "none";
+      showLogo = false;
+      gameStart = true;
+      logoTimer = 0; // 반드시 초 기화
+    } else {
+      renderer.render(scene, camera);
+    }
+    return;
+  }
+
+  if (!gameStart && playAnime) {
+    const delta = clock.getDelta();
+    animTimer += delta;
+    camera.position.set(15, 13, 5);
+    camera.lookAt(0, 5, -5);
+    mixer?.update(delta);
     renderer.render(animScene, camera);
-    timer += delta;
-    if (timer >= 10) {
+
+    if (animTimer >= 8) {
+      // 정확히 8초 동안만
+      logoTimer = 0; // 로고 타이머도 초기화
       playAnime = false;
       showLogo = true;
-      timer = 0;
+      animTimer = 0; // 반드시 초기화
     }
-
-    if (showLogo) {
-      logoOverlay.style.display = "flex";
-      timer += clock.getDelta();
-      if (timer >= 1) {
-        showLogo = false;
-        logoOverlay.style.display = "none";
-        gameStart = true;
-      }
-      return;
-    }
-  }
-  if (gameStart) {
+    return; // 애니메이션 구간 동안만 이 블록 실행
+  } else if (gameStart) {
     const dt = clock.getDelta();
     world.step(1 / 60, dt);
     if (bodiesToRemove.length) {
@@ -863,7 +926,6 @@ function animate() {
       mesh.quaternion.copy(body.quaternion);
     });
 
-
     // ── 포인터락 모드: WASD/Space/Shift로 이동 ──
     if (isPointerMode) {
       if (keys.KeyW) pointerControls.moveForward(cameraMovementSpeed * dt);
@@ -875,7 +937,19 @@ function animate() {
       if (camera.position.y < 2) {
         camera.position.y = 2;
       }
-      // 새 안으로 못들어가게 막기?
+      if (
+        camera.position.x > 50 ||
+        camera.position.x < -50 ||
+        camera.position.z > 50 ||
+        camera.position.z < -50 ||
+        camera.position.y > 30
+      ) {
+        camera.position.set(
+          Math.max(-50, Math.min(50, camera.position.x)),
+          Math.min(30, camera.position.y),
+          Math.max(-50, Math.min(50, camera.position.z))
+        );
+      }
     }
     // ── 드래그/발사 모드: 원래 카메라 로직 ──
     else {
@@ -935,6 +1009,10 @@ function animate() {
       }
     }
     controlPanel.style.display = "block";
+    logoPanel.style.display = "block";
+    modePanel.style.display = "flex";
+    updateModeUI();
+
     renderer.render(scene, camera);
   }
 }
