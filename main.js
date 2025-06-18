@@ -48,13 +48,14 @@ let gameStart = DEV_MODE;
 let playAnime = DEV_MODE;
 let timer = 0;
 let gltfAnimations = [];
+let currentAnimatedModel = null; 
 
 let clouds = []; // 구름 모델들을 저장할 배열
 const cloud1Path = "./models/backgrounds/cloud1.glb";
 const cloud2Path = "./models/backgrounds/cloud2.glb";
 
 let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
-const GLASS_BREAK_THRESHOLD = 3.5;
+const GLASS_BREAK_THRESHOLD = 5;
 const debrisList = [];
 const DEBRIS_COUNT = 30; // 잔해 개수
 const DEBRIS_LIFETIME = 1.5; // 초 단위
@@ -219,6 +220,15 @@ function initStage(stageNumber) {
     scene.remove(mesh);
   });
   clouds.length = 0;
+  if (currentAnimatedModel) {
+    animScene.remove(currentAnimatedModel);
+    currentAnimatedModel = null;
+  }
+  if(mixer) {
+    mixer.stopAllAction();
+    mixer = null;
+  }
+  gltfAnimations = [];
 
   ballBody.position.copy(initialBallPos);
   ballBody.velocity.setZero();
@@ -326,6 +336,36 @@ function initStage(stageNumber) {
     });
   });
 
+  let animFp;
+  if (stageNumber == 1) {
+    animFp = "./models/buildings/animations/WallAnime.glb";
+  } else if (stageNumber == 2) {
+    // 참고: 각 스테이지에 맞는 애니메이션 파일이 실제로 존재해야 합니다.
+    // 여기서는 예시로 WallAnime.glb을 사용하며, 실제 파일명으로 변경해야 합니다.
+    animFp = "./models/buildings/animations/PotAnime.glb"; // 예시 파일명
+  } else if (stageNumber == 3) {
+    animFp = "./models/buildings/animations/GlassTowerAnime.glb"; // 예시 파일명
+  } else {
+    animFp = "./models/buildings/animations/HouseAnime.glb"; // 예시 파일명
+  }
+
+  loader.load(animFp, (gltf) => {
+    console.log(`Animation for stage ${stageNumber} loaded from ${animFp}`);
+    const model = gltf.scene;
+    animScene.add(model);
+    currentAnimatedModel = model; // 새로 로드된 모델을 추적
+
+    mixer = new THREE.AnimationMixer(model);
+    gltfAnimations = gltf.animations;
+
+    if (gltfAnimations.length > 0) {
+      gltfAnimations.forEach((clip) => {
+        // 애니메이션 루프에서 업데이트되므로 여기서는 재생만 호출합니다.
+        mixer.clipAction(clip).play();
+      });
+    }
+  });
+
   // 구름 모델 로드 및 무작위 배치
   const numClouds = 200; // 배치할 구름의 총 개수
   const cloudSpawnArea = {
@@ -375,9 +415,45 @@ function initStage(stageNumber) {
   loadAndPlaceClouds(cloud1Path, numClouds / 10, clouds, 2.5, 3.5); // 첫 번째 구름 모델
   loadAndPlaceClouds(cloud2Path, numClouds, clouds, 2.5, 4); // 두 번째 구름 모델
 
-  spawnCharacter(pigpath, new THREE.Vector3(0, 0, 0), 2);
-  spawnCharacter(helmetpigpath, new THREE.Vector3(2, 0, 0), 2);
-  spawnCharacter(kingpigpath, new THREE.Vector3(4, 0, 0), 2);
+  if (selectedStage == 1) {
+    spawnCharacter(pigpath, new THREE.Vector3(0, 0, 1), 1.5);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(5, 0, -2.5), 1.5);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-5, 0, -2.5), 1.5);
+    spawnCharacter(kingpigpath, new THREE.Vector3(0, 2.75, -7.45), 2);
+    spawnCharacter(pigpath, new THREE.Vector3(0, 0, -13.5), 1.5)
+  }
+
+
+  if (selectedStage == 2) {
+    spawnCharacter(pigpath, new THREE.Vector3(0, 0, -7.52), 1);
+    spawnCharacter(pigpath, new THREE.Vector3(0, 0, -2.64), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(3, 0, -5), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-3, 0, -5), 2);
+  }
+
+  if(selectedStage == 3) {
+    spawnCharacter(helmetpigpath, new THREE.Vector3(0, 0, 1.3), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-1.54, 10, -5.19), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(1.54, 10, -5.19), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-1.54, 10, -7.45), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(1.54, 10, -7.45), 2);
+    spawnCharacter(kingpigpath, new THREE.Vector3(0, 10, -7.45), 2);
+  }
+  if(selectedStage == 4) {
+    spawnCharacter(pigpath, new THREE.Vector3(3, 0, -5.46), 1);
+    spawnCharacter(pigpath, new THREE.Vector3(-3, 0, -5.46), 1);
+    spawnCharacter(kingpigpath, new THREE.Vector3(0, 0, -10), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(0, 4, -1.13), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(-3, 4.38, -4.8), 2);
+    spawnCharacter(helmetpigpath, new THREE.Vector3(3, 4.38, -4.8), 2);
+
+  }
+
+
+  // spawnCharacter(pigpath, new THREE.Vector3(-0.18, 0, -7.52), 2);
+  // spawnCharacter(helmetpigpath, new THREE.Vector3(2, 0, 0), 2);
+  // spawnCharacter(kingpigpath, new THREE.Vector3(4, 0, 0), 2);
+
 }
 
 function getBestScore(stage) {
@@ -530,24 +606,6 @@ const animAmbient = new THREE.AmbientLight(0xffffff, 1.0);
 scene.add(ambient);
 animScene.add(animAmbient);
 
-// === 구조물: Blender Animation GLB 모델 로딩
-const loaderAnim = new GLTFLoader();
-loader.load("./models/buildings/animations/WallAnime.glb", (gltf) => {
-  // 애니메이션 관련
-  loaderAnim.load("./models/buildings/animations/WallAnime.glb", (gltf) => {
-    console.log("GLTF loaded:", gltf);
-    const model = gltf.scene;
-    animScene.add(model);
-    mixer = new THREE.AnimationMixer(model);
-    gltfAnimations = gltf.animations;
-    if (!playAnime) {
-      gltfAnimations.forEach((clip) => {
-        mixer.clipAction(clip).play();
-      });
-    }
-  });
-});
-
 let birdMesh;
 // === Bird 모델 로드 ===
 loader.load("./models/characters/Bird.glb", (gltf) => {
@@ -687,6 +745,7 @@ function spawnCharacter(name, position, scale) {
         0.1 * sizeconstant,
         0.1 * sizeconstant
       );
+      pigRoot.rotation.y = -Math.PI;
 
       // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
       pigRoot.traverse((child) => {
@@ -711,6 +770,7 @@ function spawnCharacter(name, position, scale) {
         0.1 * sizeconstant,
         0.1 * sizeconstant
       );
+      pigRoot.rotation.y = -Math.PI;
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
@@ -735,6 +795,7 @@ function spawnCharacter(name, position, scale) {
         0.1 * sizeconstant,
         0.1 * sizeconstant
       );
+      pigRoot.rotation.y = -Math.PI;
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
@@ -762,7 +823,7 @@ function spawnCharacter(name, position, scale) {
   return mesh;
 }
 
-const DEATH_THRESHOLD = [1, 2.5, 4];
+const DEATH_THRESHOLD = [6, 10, 16];
 
 // =======================================
 //  PointerLockControls 세팅
@@ -981,6 +1042,9 @@ function animate() {
           Math.max(-50, Math.min(50, camera.position.z))
         );
       }
+      console.log(
+        `Camera Position: X=${camera.position.x.toFixed(2)}, Y=${camera.position.y.toFixed(2)}, Z=${camera.position.z.toFixed(2)}`
+      );
     }
     // ── 드래그/발사 모드: 원래 카메라 로직 ──
     else {
