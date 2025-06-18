@@ -48,7 +48,7 @@ let gameStart = DEV_MODE;
 let playAnime = DEV_MODE;
 let timer = 0;
 let gltfAnimations = [];
-let currentAnimatedModel = null; 
+let currentAnimatedModel = null;
 
 let clouds = []; // 구름 모델들을 저장할 배열
 const cloud1Path = "./models/backgrounds/cloud1.glb";
@@ -224,7 +224,7 @@ function initStage(stageNumber) {
     animScene.remove(currentAnimatedModel);
     currentAnimatedModel = null;
   }
-  if(mixer) {
+  if (mixer) {
     mixer.stopAllAction();
     mixer = null;
   }
@@ -243,9 +243,9 @@ function initStage(stageNumber) {
     fp = new String("./models/buildings/Pot.glb");
   } else if (stageNumber == 3) {
     fp = new String("./models/buildings/GlassTower.glb");
-  } else if(stageNumber==4){
+  } else if (stageNumber == 4) {
     fp = new String("./models/buildings/House.glb");
-  }else{
+  } else {
     fp = new String("./models/buildings/Domino.glb");
   }
   loader.load(fp, (gltf) => {
@@ -420,9 +420,8 @@ function initStage(stageNumber) {
     spawnCharacter(helmetpigpath, new THREE.Vector3(5, 0, -2.5), 1.5);
     spawnCharacter(helmetpigpath, new THREE.Vector3(-5, 0, -2.5), 1.5);
     spawnCharacter(kingpigpath, new THREE.Vector3(0, 2.75, -7.45), 2);
-    spawnCharacter(pigpath, new THREE.Vector3(0, 0, -13.5), 1.5)
+    spawnCharacter(pigpath, new THREE.Vector3(0, 0, -13.5), 1.5);
   }
-
 
   if (selectedStage == 2) {
     spawnCharacter(pigpath, new THREE.Vector3(0, 0, -7.52), 1);
@@ -431,7 +430,7 @@ function initStage(stageNumber) {
     spawnCharacter(helmetpigpath, new THREE.Vector3(-3, 0, -5), 2);
   }
 
-  if(selectedStage == 3) {
+  if (selectedStage == 3) {
     spawnCharacter(helmetpigpath, new THREE.Vector3(0, 0, 1.3), 2);
     spawnCharacter(helmetpigpath, new THREE.Vector3(-1.54, 10, -5.19), 2);
     spawnCharacter(helmetpigpath, new THREE.Vector3(1.54, 10, -5.19), 2);
@@ -439,21 +438,18 @@ function initStage(stageNumber) {
     spawnCharacter(helmetpigpath, new THREE.Vector3(1.54, 10, -7.45), 2);
     spawnCharacter(kingpigpath, new THREE.Vector3(0, 10, -7.45), 2);
   }
-  if(selectedStage == 4) {
+  if (selectedStage == 4) {
     spawnCharacter(pigpath, new THREE.Vector3(3, 0, -5.46), 1);
     spawnCharacter(pigpath, new THREE.Vector3(-3, 0, -5.46), 1);
     spawnCharacter(kingpigpath, new THREE.Vector3(0, 0, -10), 2);
     spawnCharacter(helmetpigpath, new THREE.Vector3(0, 4, -1.13), 2);
     spawnCharacter(helmetpigpath, new THREE.Vector3(-3, 4.38, -4.8), 2);
     spawnCharacter(helmetpigpath, new THREE.Vector3(3, 4.38, -4.8), 2);
-
   }
-
 
   // spawnCharacter(pigpath, new THREE.Vector3(-0.18, 0, -7.52), 2);
   // spawnCharacter(helmetpigpath, new THREE.Vector3(2, 0, 0), 2);
   // spawnCharacter(kingpigpath, new THREE.Vector3(4, 0, 0), 2);
-
 }
 
 function getBestScore(stage) {
@@ -1043,7 +1039,11 @@ function animate() {
         );
       }
       console.log(
-        `Camera Position: X=${camera.position.x.toFixed(2)}, Y=${camera.position.y.toFixed(2)}, Z=${camera.position.z.toFixed(2)}`
+        `Camera Position: X=${camera.position.x.toFixed(
+          2
+        )}, Y=${camera.position.y.toFixed(2)}, Z=${camera.position.z.toFixed(
+          2
+        )}`
       );
     }
     // ── 드래그/발사 모드: 원래 카메라 로직 ──
