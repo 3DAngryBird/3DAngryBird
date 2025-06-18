@@ -43,6 +43,11 @@ let playAnime = DEV_MODE;
 let timer = 0;
 let gltfAnimations = [];
 
+let clouds = []; // 구름 모델들을 저장할 배열
+const cloud1Path = "./models/cloud1.glb";
+const cloud2Path = "./models/cloud2.glb";
+
+
 let WAIT_AFTER_THROW = 3000; // 던진 후 대기 시간 (ms)
 const GLASS_BREAK_THRESHOLD = 2.5;
 const debrisList = [];
@@ -252,6 +257,43 @@ function initStage(stageNumber) {
       }
     });
   });
+
+  // 구름 모델 로드 및 무작위 배치
+  const numClouds = 200; // 배치할 구름의 총 개수
+  const cloudSpawnArea = {
+      minX: -200, maxX: 200, // 구름이 배치될 넓은 X 범위
+      minY: 20, maxY: 40,   // 구름이 배치될 Y 높이 범위 (하늘)
+      minZ: -200, maxZ: 200   // 구름이 배치될 넓은 Z 범위
+  };
+
+  const loadAndPlaceClouds = (path, count, arrayToStore, minScale, maxScale) => {
+      loader.load(path, (gltf) => {
+          for (let i = 0; i < count; i++) {
+              const model = gltf.scene.clone();
+
+              const x = Math.random() * (cloudSpawnArea.maxX - cloudSpawnArea.minX) + cloudSpawnArea.minX;
+              const y = Math.random() * (cloudSpawnArea.maxY - cloudSpawnArea.minY) + cloudSpawnArea.minY;
+              const z = Math.random() * (cloudSpawnArea.maxZ - cloudSpawnArea.minZ) + cloudSpawnArea.minZ;
+
+              model.position.set(x, y, z);
+
+              const scale = minScale + Math.random() * (maxScale - minScale);
+              model.scale.set(scale, scale, scale);
+              model.rotation.y = Math.random() * Math.PI * 2; // 무작위 Y축 회전
+
+              scene.add(model);
+              arrayToStore.push(model);
+          }
+      });
+  };
+
+  // cloud1.glb 와 cloud2.glb 를 각각 10개씩 배치 (총 20개)
+  // minScale과 maxScale을 조절하여 구름의 크기 범위를 설정합니다.
+  loadAndPlaceClouds(cloud1Path, numClouds / 10, clouds, 2.5, 3.5); // 첫 번째 구름 모델
+  loadAndPlaceClouds(cloud2Path, numClouds, clouds, 2.5, 4); // 두 번째 구름 모델
+
+
+
   spawnCharacter(pigpath, new THREE.Vector3(0, 0.2, 0));
   spawnCharacter(helmetpigpath, new THREE.Vector3(1, 0.2, 0));
 }
@@ -347,10 +389,28 @@ const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
 
 // === 바닥 ===
 const textureLoader = new THREE.TextureLoader();
-const grassTexture = textureLoader.load("./models/onetonegrass.png");
-grassTexture.wrapT = THREE.RepeatWrapping;
-grassTexture.wrapS = THREE.RepeatWrapping;
-grassTexture.repeat.set(50, 50);
+// const grassTexture = textureLoader.load("./models/onetonegrass.png");
+const grassDiffuseMap = textureLoader.load("./models/grassDiffuse.jpg");
+const grassBumpMap = textureLoader.load("./models/grassBump.jpg");
+const grassNormalMap = textureLoader.load("./models/grassNormal.jpg");
+
+// 텍스처 반복 설정
+grassDiffuseMap.wrapS = THREE.RepeatWrapping;
+grassDiffuseMap.wrapT = THREE.RepeatWrapping;
+grassDiffuseMap.repeat.set(50, 50); // 바닥 크기에 맞춰 반복 횟수 조절
+
+grassBumpMap.wrapS = THREE.RepeatWrapping;
+grassBumpMap.wrapT = THREE.RepeatWrapping;
+grassBumpMap.repeat.set(50, 50);
+
+grassNormalMap.wrapS = THREE.RepeatWrapping;
+grassNormalMap.wrapT = THREE.RepeatWrapping;
+grassNormalMap.repeat.set(50, 50);
+
+
+// grassTexture.wrapT = THREE.RepeatWrapping;
+// grassTexture.wrapS = THREE.RepeatWrapping;
+// grassTexture.repeat.set(50, 50);
 const floorGeo = new THREE.BoxGeometry(100, 0.1, 100);
 // const floorMat = new THREE.MeshStandardMaterial({
 //   color: 0x888888,
@@ -358,7 +418,14 @@ const floorGeo = new THREE.BoxGeometry(100, 0.1, 100);
 //   opacity: 0.5,
 // });
 
-const floorMat = new THREE.MeshStandardMaterial({ map: grassTexture });
+const floorMat = new THREE.MeshStandardMaterial({
+  map: grassDiffuseMap,
+  bumpMap: grassBumpMap,
+  bumpScale: 0.5, // 범프 맵의 강도 조절 (필요에 따라 조정)
+  normalMap: grassNormalMap,
+  normalScale: new THREE.Vector2(1, 1), // 노멀 맵의 강도 조절 (필요에 따라 조정)
+
+});
 const floorMesh = new THREE.Mesh(floorGeo, floorMat);
 floorMesh.position.set(0, -0.05, 0);
 floorMesh.receiveShadow = true;
@@ -405,6 +472,22 @@ loader.load("./models/WallAnime.glb", (gltf) => {
     }
   });
 });
+
+let birdMesh;
+// === Bird 모델 로드 ===
+loader.load('./models/Bird.glb', (gltf) => {
+    birdMesh = gltf.scene;
+    birdMesh.scale.set(0.15, 0.15, 0.15); // 새 모델의 크기 조절
+    scene.add(birdMesh);
+
+    birdMesh.position.set(0, -0.2, 0);
+    birdMesh.rotation.y = -Math.PI;
+
+    ballMesh.add(birdMesh); // ballMesh의 자식으로 birdMesh 추가
+
+});
+
+
 
 // === 공 ===
 const ballGeo = new THREE.SphereGeometry(0.2);
@@ -774,6 +857,7 @@ function animate() {
       mesh.quaternion.copy(body.quaternion);
     });
 
+
     // ── 포인터락 모드: WASD/Space/Shift로 이동 ──
     if (isPointerMode) {
       if (keys.KeyW) pointerControls.moveForward(cameraMovementSpeed * dt);
@@ -782,9 +866,10 @@ function animate() {
       if (keys.KeyD) pointerControls.moveRight(cameraMovementSpeed * dt);
       if (keys.Space) camera.translateY(cameraMovementSpeed * dt);
       if (keys.ShiftLeft) camera.translateY(-cameraMovementSpeed * dt);
-      if (camera.position.y < 0.1) {
-        camera.position.y = 0.1;
+      if (camera.position.y < 2) {
+        camera.position.y = 2;
       }
+      // 새 안으로 못들어가게 막기?
     }
     // ── 드래그/발사 모드: 원래 카메라 로직 ──
     else {
