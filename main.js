@@ -371,8 +371,8 @@ function initStage(stageNumber) {
   loadAndPlaceClouds(cloud2Path, numClouds, clouds, 2.5, 4); // 두 번째 구름 모델
 
   spawnCharacter(pigpath, new THREE.Vector3(0, 0, 0), 2);
-  spawnCharacter(helmetpigpath, new THREE.Vector3(1, 0, 0), 2);
-  spawnCharacter(kingpigpath, new THREE.Vector3(2, 0, 0), 2);
+  spawnCharacter(helmetpigpath, new THREE.Vector3(2, 0, 0), 2);
+  spawnCharacter(kingpigpath, new THREE.Vector3(4, 0, 0), 2);
 }
 
 function getBestScore(stage) {
@@ -677,7 +677,11 @@ function spawnCharacter(name, position, scale) {
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
-      pigRoot.scale.set(0.1 * sizeconstant, 0.1 * sizeconstant, 0.1 * sizeconstant);
+      pigRoot.scale.set(
+        0.1 * sizeconstant,
+        0.1 * sizeconstant,
+        0.1 * sizeconstant
+      );
 
       // 모든 Mesh 재질 순회하면서 색상(HSL)을 밝게 보정
       pigRoot.traverse((child) => {
@@ -697,7 +701,11 @@ function spawnCharacter(name, position, scale) {
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-1 * size) / 11.0, 0);
-      pigRoot.scale.set(0.1 * sizeconstant, 0.1 * sizeconstant, 0.1 * sizeconstant);
+      pigRoot.scale.set(
+        0.1 * sizeconstant,
+        0.1 * sizeconstant,
+        0.1 * sizeconstant
+      );
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
@@ -717,7 +725,11 @@ function spawnCharacter(name, position, scale) {
 
       // 위치/스케일 보정
       pigRoot.position.set(0, (-10 * size) / 11.0, 0);
-      pigRoot.scale.set(0.1 * sizeconstant, 0.1 * sizeconstant, 0.1 * sizeconstant);
+      pigRoot.scale.set(
+        0.1 * sizeconstant,
+        0.1 * sizeconstant,
+        0.1 * sizeconstant
+      );
 
       // 모든 Mesh 재질 순회하면서 색상(HSL) 밝게 보정
       pigRoot.traverse((child) => {
